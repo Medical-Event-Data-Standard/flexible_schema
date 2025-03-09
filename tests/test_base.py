@@ -17,10 +17,14 @@ def test_schema_with_extra_cols():
     assert list(sample) == ["subject_id"]
     assert list(sample.values()) == [1]
 
+    assert sample == Sample(subject_id=1)
+    assert sample == Sample(1)
+
     sample_2 = Sample(subject_id=1, foo="bar")
     assert sample != sample_2
     assert sample_2["foo"] == "bar"
     assert sample_2.to_dict() == {"subject_id": 1, "foo": "bar"}
+    assert sample_2 == Sample.from_dict({"subject_id": 1, "foo": "bar"})
 
     sample["foo"] = "bar"
     assert sample == sample_2
@@ -28,6 +32,9 @@ def test_schema_with_extra_cols():
     sample_3 = Sample(subject_id=1, foo="bar", extra="extra")
     assert sample_3["extra"] == "extra"
     assert sample_3.to_dict() == {"subject_id": 1, "foo": "bar", "extra": "extra"}
+    assert sample_3 == Sample.from_dict(sample_3.to_dict())
+
+    assert sample_3 == Sample(1, "bar", extra="extra")
 
     assert list(sample_3.keys()) == ["subject_id", "foo", "extra"]
     assert list(sample_3.items()) == [("subject_id", 1), ("foo", "bar"), ("extra", "extra")]
@@ -64,3 +71,22 @@ def test_schema_no_extra_cols():
         raise AssertionError("Should have raised an exception")
     except SchemaValidationError as e:
         assert "Extra field not allowed: 'extra'" in str(e)
+
+
+def test_errors():
+    class Sample(Schema):
+        allow_extra_columns: ClassVar[bool] = False
+        subject_id: int
+        foo: str | None = None
+
+    try:
+        Sample(1, 2, 3)
+        raise AssertionError("Should have raised an exception")
+    except TypeError as e:
+        assert "Sample expected 2 arguments, got 3" in str(e)
+
+    try:
+        Sample(1, subject_id=1, foo=2)
+        raise AssertionError("Should have raised an exception")
+    except TypeError as e:
+        assert "Sample got multiple values for argument 'subject_id'" in str(e)
