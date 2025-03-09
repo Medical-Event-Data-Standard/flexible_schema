@@ -2,18 +2,9 @@
 
 import datetime
 from dataclasses import fields
-from typing import Any, get_args
+from typing import Any, ClassVar, get_args
 
 from .base import Schema
-
-PYTHON_TO_JSON = {
-    int: "integer",
-    float: "number",
-    str: "string",
-    bool: "boolean",
-    datetime.datetime: "string",  # datetime as ISO8601 string
-}
-TIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"  # ISO8601 format
 
 
 class JSONSchema(Schema):
@@ -25,14 +16,13 @@ class JSONSchema(Schema):
     of data conforming to the schema.
 
     Example usage:
-        >>> from typing import Optional
         >>> class Data(JSONSchema):
         ...     allow_extra_columns: ClassVar[bool] = True
         ...     subject_id: int
         ...     time: datetime.datetime
         ...     code: str
-        ...     numeric_value: Optional[float] = None
-        ...     text_value: Optional[str] = None
+        ...     numeric_value: float | None = None
+        ...     text_value: str | None = None
         >>> Data.subject_id_name
         'subject_id'
         >>> Data.subject_id_dtype
@@ -52,10 +42,18 @@ class JSONSchema(Schema):
          'additionalProperties': True}
     """
 
+    PYTHON_TO_JSON: ClassVar[dict[Any, str]] = {
+        int: "integer",
+        float: "number",
+        str: "string",
+        bool: "boolean",
+        datetime.datetime: "string",  # datetime as ISO8601 string
+    }
+
     @classmethod
     def _remap_type(cls, field: Any) -> Any:
-        field_type = get_args(field)[0] if cls._is_optional(field) else field
-        return PYTHON_TO_JSON.get(field_type.type, "string")
+        field_type = get_args(field.type)[0] if cls._is_optional(field.type) else field.type
+        return cls.PYTHON_TO_JSON.get(field_type, "string")
 
     @classmethod
     def to_json_schema(cls) -> dict[str, Any]:
@@ -65,9 +63,8 @@ class JSONSchema(Schema):
         for f in fields(cls):
             if f.name == "_extra_fields":
                 continue
-            optional = cls._is_optional(f.type)
-            base_type = get_args(f.type)[0] if optional else f.type
-            json_type = PYTHON_TO_JSON.get(base_type, "string")
+            json_type = cls._remap_type(f)
+            base_type = get_args(f.type)[0] if cls._is_optional(f.type) else f.type
 
             property_schema = {"type": json_type}
 
@@ -77,7 +74,7 @@ class JSONSchema(Schema):
 
             schema_properties[f.name] = property_schema
 
-            if not optional:
+            if not cls._is_optional(f.type):
                 required_fields.append(f.name)
 
         schema = {

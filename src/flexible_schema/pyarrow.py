@@ -2,20 +2,11 @@
 
 import datetime
 from dataclasses import fields
-from typing import Any, get_args
+from typing import Any, ClassVar, get_args, get_origin
 
 import pyarrow as pa
 
 from .base import Schema, SchemaValidationError
-
-PYTHON_TO_PYARROW = {
-    int: pa.int64(),
-    float: pa.float32(),
-    str: pa.string(),
-    bool: pa.bool_(),
-    datetime.datetime: pa.timestamp("us"),
-    list[str]: pa.list_(pa.string()),  # This likely won't work
-}
 
 
 class PyArrowSchema(Schema):
@@ -43,17 +34,18 @@ class PyArrowSchema(Schema):
         'time'
         >>> Data.time_dtype
         TimestampType(timestamp[us])
-        >>> Data.text_value_name
-        'text_value'
-        >>> Data.text_value_dtype
-        pa.list_(pa.string())
+        >>> Data.parent_codes_name
+        'parent_codes'
+        >>> Data.parent_codes_dtype
+        ListType(list<item: string>)
         >>> data = Data(subject_id=1, time=datetime.datetime(2025, 3, 7, 16), code="A", numeric_value=1.0)
         >>> data # doctest: +NORMALIZE_WHITESPACE
         Data(subject_id=1,
              time=datetime.datetime(2025, 3, 7, 16, 0),
              code='A',
              numeric_value=1.0,
-             text_value=None)
+             text_value=None,
+             parent_codes=None)
         >>> data_tbl = pa.Table.from_pydict({
         ...     "time": [
         ...         datetime.datetime(2021, 3, 1),
@@ -70,12 +62,15 @@ class PyArrowSchema(Schema):
         code: string
         numeric_value: float
         text_value: string
+        parent_codes: list<item: string>
+          child 0, item: string
         ----
         subject_id: [[1,2,3]]
         time: [[2021-03-01 00:00:00.000000,2021-04-01 00:00:00.000000,2021-05-01 00:00:00.000000]]
         code: [["A","B","C"]]
         numeric_value: [[null,null,null]]
         text_value: [[null,null,null]]
+        parent_codes: [[null,null,null]]
         >>> data_tbl_with_extra = pa.Table.from_pydict({
         ...     "time": [
         ...         datetime.datetime(2021, 3, 1),
@@ -93,6 +88,8 @@ class PyArrowSchema(Schema):
         code: string
         numeric_value: float
         text_value: string
+        parent_codes: list<item: string>
+          child 0, item: string
         extra_1: string
         extra_2: int64
         ----
@@ -101,16 +98,41 @@ class PyArrowSchema(Schema):
         code: [["D","E"]]
         numeric_value: [[null,null]]
         text_value: [[null,null]]
+        parent_codes: [[null,null]]
         extra_1: [["extra1","extra2"]]
         extra_2: [[452,11]]
     """
 
+    PYTHON_TO_PYARROW: ClassVar[dict[Any, pa.DataType]] = {
+        int: pa.int64(),
+        float: pa.float32(),
+        str: pa.string(),
+        bool: pa.bool_(),
+        datetime.datetime: pa.timestamp("us"),
+        list[str]: pa.list_(pa.string()),  # This likely won't work
+    }
+
     @classmethod
-    def _remap_type(cls, field: Any) -> Any:
+    def _remap_type(cls, field: Any) -> pa.DataType | None:
         if field.name == "_extra_fields":
             return None
+
         field_type = get_args(field.type)[0] if cls._is_optional(field.type) else field.type
-        return PYTHON_TO_PYARROW[field_type]
+        return cls._remap_type_internal(field_type)
+
+    @classmethod
+    def _remap_type_internal(cls, field_type: Any) -> pa.DataType:
+        origin = get_origin(field_type)
+
+        if origin is list:
+            args = get_args(field_type)
+            return pa.list_(cls._remap_type_internal(args[0]))
+        elif field_type in cls.PYTHON_TO_PYARROW:
+            return cls.PYTHON_TO_PYARROW[field_type]
+        elif isinstance(field_type, pa.DataType):
+            return field_type
+        else:
+            raise ValueError(f"Unsupported type: {field_type}")
 
     @classmethod
     def validate(
