@@ -61,8 +61,6 @@ class JSONSchema(Schema):
         required_fields = []
 
         for f in fields(cls):
-            if f.name == "_extra_fields":
-                continue
             json_type = cls._remap_type(f)
             base_type = get_args(f.type)[0] if cls._is_optional(f.type) else f.type
 

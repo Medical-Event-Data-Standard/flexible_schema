@@ -114,9 +114,6 @@ class PyArrowSchema(Schema):
 
     @classmethod
     def _remap_type(cls, field: Any) -> pa.DataType | None:
-        if field.name == "_extra_fields":
-            return None
-
         field_type = get_args(field.type)[0] if cls._is_optional(field.type) else field.type
         return cls._remap_type_internal(field_type)
 
@@ -145,7 +142,7 @@ class PyArrowSchema(Schema):
             table = pa.Table.from_pydict(table)
 
         table_cols = set(table.column_names)
-        mandatory_cols = {f.name for f in fields(cls) if not cls._is_optional(f.type)} - {"_extra_fields"}
+        mandatory_cols = {f.name for f in fields(cls) if not cls._is_optional(f.type)}
         all_defined_cols = {f.name for f in fields(cls)}
 
         missing_cols = mandatory_cols - table_cols
@@ -157,8 +154,6 @@ class PyArrowSchema(Schema):
             raise SchemaValidationError(f"Unexpected extra columns: {extra_cols}")
 
         for f in fields(cls):
-            if f.name == "_extra_fields":
-                continue
             if f.name not in table_cols:
                 length = table.num_rows
                 arrow_type = cls._remap_type(f)
@@ -174,8 +169,6 @@ class PyArrowSchema(Schema):
         # Cast columns if needed
         if cast_types:
             for f in fields(cls):
-                if f.name == "_extra_fields":
-                    continue
                 expected_type = cls._remap_type(f)
                 current_type = table.schema.field(f.name).type
                 if current_type != expected_type:
