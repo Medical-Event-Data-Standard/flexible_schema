@@ -101,6 +101,37 @@ class PyArrowSchema(Schema):
         parent_codes: [[null,null]]
         extra_1: [["extra1","extra2"]]
         extra_2: [[452,11]]
+
+        You can also specify type hints directly using PyArrow types:
+
+        >>> class Data(PyArrowSchema):
+        ...     allow_extra_columns: ClassVar[bool] = False
+        ...     subject_id: pa.int64()
+        ...     code: str
+        >>> Data.subject_id_dtype
+        DataType(int64)
+        >>> Data.code_dtype
+        DataType(string)
+        >>> data_tbl_with_extra = pa.Table.from_pydict({
+        ...     "subject_id": [4, 5],
+        ...     "code": ["D", "E"],
+        ... })
+        >>> Data.validate(data_tbl_with_extra)
+        pyarrow.Table
+        subject_id: int64
+        code: string
+        ----
+        subject_id: [[4,5]]
+        code: [["D","E"]]
+        >>> data_tbl_with_extra = pa.Table.from_pydict({
+        ...     "subject_id": [4, 5],
+        ...     "code": ["D", "E"],
+        ...     "extra_1": ["extra1", "extra2"],
+        ... })
+        >>> Data.validate(data_tbl_with_extra)
+        Traceback (most recent call last):
+            ...
+        flexible_schema.base.SchemaValidationError: Unexpected extra columns: {'extra_1'}
     """
 
     PYTHON_TO_PYARROW: ClassVar[dict[Any, pa.DataType]] = {
