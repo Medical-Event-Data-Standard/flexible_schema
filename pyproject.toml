@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools >= 69.0", "setuptools-scm>=8.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flexible_schema"
+dynamic = ["version"]
+authors = [
+  {name="Matthew McDermott", email="mattmcdermott8@gmail.com"},
+]
+description = "A simple class to aid in defining flexible schemas for PyArrow datasets."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pyarrow >= 8",
+    "jsonschema >= 4.0.0",
+    "typing_extensions >= 4.0",
+]
+
+[tool.setuptools_scm]
+
+[project.optional-dependencies]
+dev = ["pre-commit<4"]
+tests = ["pytest", "pytest-cov[toml]"]
+
+[tool.pytest.ini_options]
+addopts = [
+  "--color=yes",
+  "--doctest-modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/mmcdermott/flexible_schema"
+Issues = "https://github.com/mmcdermott/flexible_schema/issues"
