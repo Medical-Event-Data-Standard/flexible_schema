@@ -46,13 +46,16 @@ class PyArrowSchema(Schema):
              numeric_value=1.0,
              text_value=None,
              parent_codes=None)
+
+        You can also validate tables with this class
+
         >>> data_tbl = pa.Table.from_pydict({
+        ...     "subject_id": [1, 2, 3],
         ...     "time": [
         ...         datetime.datetime(2021, 3, 1),
         ...         datetime.datetime(2021, 4, 1),
         ...         datetime.datetime(2021, 5, 1),
         ...     ],
-        ...     "subject_id": [1, 2, 3],
         ...     "code": ["A", "B", "C"],
         ... })
         >>> Data.validate(data_tbl)
@@ -71,6 +74,43 @@ class PyArrowSchema(Schema):
         numeric_value: [[null,null,null]]
         text_value: [[null,null,null]]
         parent_codes: [[null,null,null]]
+
+        Including casting and reordering columns:
+
+        >>> data_tbl = pa.Table.from_pydict({
+        ...     "time": [
+        ...         datetime.datetime(2021, 3, 1),
+        ...         datetime.datetime(2021, 4, 1),
+        ...         datetime.datetime(2021, 5, 1),
+        ...     ],
+        ...     "subject_id": [1, 2, 3],
+        ...     "code": ["A", "B", "C"],
+        ... }, schema=pa.schema(
+        ...     [
+        ...         pa.field("time", pa.timestamp("us")),
+        ...         pa.field("subject_id", pa.int32()),
+        ...         pa.field("code", pa.string()),
+        ...     ]
+        ... ))
+        >>> Data.validate(data_tbl)
+        pyarrow.Table
+        subject_id: int64
+        time: timestamp[us]
+        code: string
+        numeric_value: float
+        text_value: string
+        parent_codes: list<item: string>
+          child 0, item: string
+        ----
+        subject_id: [[1,2,3]]
+        time: [[2021-03-01 00:00:00.000000,2021-04-01 00:00:00.000000,2021-05-01 00:00:00.000000]]
+        code: [["A","B","C"]]
+        numeric_value: [[null,null,null]]
+        text_value: [[null,null,null]]
+        parent_codes: [[null,null,null]]
+
+        And handling extra columns:
+
         >>> data_tbl_with_extra = pa.Table.from_pydict({
         ...     "time": [
         ...         datetime.datetime(2021, 3, 1),
@@ -112,17 +152,16 @@ class PyArrowSchema(Schema):
         DataType(int64)
         >>> Data.code_dtype
         DataType(string)
-        >>> data_tbl_with_extra = pa.Table.from_pydict({
-        ...     "subject_id": [4, 5],
-        ...     "code": ["D", "E"],
-        ... })
-        >>> Data.validate(data_tbl_with_extra)
+        >>> Data.validate(pa.Table.from_pydict({"subject_id": [4, 5], "code": ["D", "E"]}))
         pyarrow.Table
         subject_id: int64
         code: string
         ----
         subject_id: [[4,5]]
         code: [["D","E"]]
+
+        Errors will be raised when extra columns are present inapproriately or mandatory columns are missing:
+
         >>> data_tbl_with_extra = pa.Table.from_pydict({
         ...     "subject_id": [4, 5],
         ...     "code": ["D", "E"],
@@ -132,6 +171,25 @@ class PyArrowSchema(Schema):
         Traceback (most recent call last):
             ...
         flexible_schema.base.SchemaValidationError: Unexpected extra columns: {'extra_1'}
+        >>> Data.validate(pa.Table.from_pydict({ "subject_id": [4, 5], }))
+        Traceback (most recent call last):
+            ...
+        flexible_schema.base.SchemaValidationError: Missing mandatory columns: {'code'}
+
+        Or when columns can't be cast properly:
+
+        >>> Data.validate(pa.Table.from_pydict({"subject_id": ["A", "B"], "code": ["D", "E"]}))
+        Traceback (most recent call last):
+            ...
+        flexible_schema.base.SchemaValidationError: Column 'subject_id' cast failed: ...
+
+        Not all types are supported
+
+        >>> class Data(PyArrowSchema):
+        ...     foo: dict[str, str]
+        Traceback (most recent call last):
+            ...
+        ValueError: Unsupported type: dict[str, str]
     """
 
     PYTHON_TO_PYARROW: ClassVar[dict[Any, pa.DataType]] = {
@@ -165,13 +223,10 @@ class PyArrowSchema(Schema):
     @classmethod
     def validate(
         cls,
-        table: pa.Table | dict[str, list[Any]],
+        table: pa.Table,
         reorder_columns: bool = True,
         cast_types: bool = True,
     ) -> pa.Table:
-        if isinstance(table, dict):
-            table = pa.Table.from_pydict(table)
-
         table_cols = set(table.column_names)
         mandatory_cols = {f.name for f in fields(cls) if not cls._is_optional(f.type)}
         all_defined_cols = {f.name for f in fields(cls)}
