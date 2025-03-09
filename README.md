@@ -21,12 +21,9 @@ pip install flexible_schema
 ## Usage
 
 ```python
->>> from flexible_schema import Schema, with_field_names_and_types
+>>> from flexible_schema import PyArrowSchema
 
->>> from typing import Optional
->>> @with_field_names_and_types
-... @dataclass
-... class Data(Schema):
+>>> class Data(Schema):
 ...     allow_extra_columns: ClassVar[bool] = True
 ...     subject_id: int
 ...     time: datetime.datetime
@@ -41,13 +38,6 @@ DataType(int64)
 'time'
 >>> Data.time_dtype
 TimestampType(timestamp[us])
->>> data = Data(subject_id=1, time=datetime.datetime(2025, 3, 7, 16), code="A", numeric_value=1.0)
->>> data # doctest: +NORMALIZE_WHITESPACE
-Data(subject_id=1,
-     time=datetime.datetime(2025, 3, 7, 16, 0),
-     code='A',
-     numeric_value=1.0,
-     text_value=None)
 >>> data_tbl = pa.Table.from_pydict({
 ...     "time": [
 ...         datetime.datetime(2021, 3, 1),
