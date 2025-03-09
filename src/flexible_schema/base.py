@@ -58,13 +58,6 @@ class SchemaMeta(type):
 class Schema(metaclass=SchemaMeta):
     allow_extra_columns: ClassVar[bool] = True
 
-    def __post_init__(self):
-        defined_field_names = {f.name for f in fields(self)}
-        provided_fields = set(self.__dict__)
-        extra_fields = provided_fields - defined_field_names
-        if extra_fields and not self.allow_extra_columns:
-            raise SchemaValidationError(f"Unexpected extra fields: {extra_fields}")
-
     def __getitem__(self, key):
         return getattr(self, key)
 
@@ -72,10 +65,13 @@ class Schema(metaclass=SchemaMeta):
         if hasattr(self, key) or self.allow_extra_columns:
             setattr(self, key, value)
         else:
-            raise SchemaValidationError(f"Extra field not allowed: {key}")
+            raise SchemaValidationError(f"Extra field not allowed: {repr(key)}")
 
     def keys(self):
-        return list(self.__dict__)
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
 
     def to_dict(self):
         return {k: v for k, v in self.__dict__.items() if v is not None}
@@ -85,7 +81,7 @@ class Schema(metaclass=SchemaMeta):
         return cls(**data)
 
     def items(self):
-        return [(k, self[k]) for k in self.keys()]
+        return self.to_dict().items()
 
     def __iter__(self):
         return iter(self.keys())
