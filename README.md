@@ -22,14 +22,14 @@ pip install flexible_schema
 
 ```python
 >>> from flexible_schema import PyArrowSchema
-
->>> class Data(Schema):
-...     allow_extra_columns: ClassVar[bool] = True
+>>> import pyarrow as pa
+>>> import datetime
+>>> class Data(PyArrowSchema):
 ...     subject_id: int
 ...     time: datetime.datetime
 ...     code: str
-...     numeric_value: Optional[float] = None
-...     text_value: Optional[str] = None
+...     numeric_value: float | None = None
+...     text_value: str | None = None
 >>> Data.subject_id_name
 'subject_id'
 >>> Data.subject_id_dtype
@@ -87,13 +87,5 @@ numeric_value: [[null,null]]
 text_value: [[null,null]]
 extra_1: [["extra1","extra2"]]
 extra_2: [[452,11]]
->>> Data.to_json_schema() # doctest: +NORMALIZE_WHITESPACE
-{'type': 'object',
- 'properties': {'subject_id': {'type': 'integer'},
-                'time': {'type': 'string', 'format': 'date-time'},
-                'code': {'type': 'string'},
-                'numeric_value': {'type': 'number'},
-                'text_value': {'type': 'string'}},
- 'required': ['subject_id', 'time', 'code'],
- 'additionalProperties': True}
+
 ```
