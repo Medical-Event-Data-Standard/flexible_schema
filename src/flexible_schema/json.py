@@ -2,7 +2,7 @@
 
 import datetime
 from dataclasses import fields
-from typing import Any, ClassVar
+from typing import Any, ClassVar, get_args, get_origin
 
 from .base import Schema
 
@@ -26,12 +26,12 @@ class JSONSchema(Schema):
         >>> Data.subject_id_name
         'subject_id'
         >>> Data.subject_id_dtype
-        'integer'
+        {'type': 'integer'}
         >>> Data.time_name
         'time'
         >>> Data.time_dtype
-        'string'
-        >>> Data.to_json_schema() # doctest: +NORMALIZE_WHITESPACE
+        {'type': 'string', 'format': 'date-time'}
+        >>> Data.schema() # doctest: +NORMALIZE_WHITESPACE
         {'type': 'object',
          'properties': {'subject_id': {'type': 'integer'},
                         'time': {'type': 'string', 'format': 'date-time'},
@@ -47,29 +47,59 @@ class JSONSchema(Schema):
         float: "number",
         str: "string",
         bool: "boolean",
-        datetime.datetime: "string",  # datetime as ISO8601 string
     }
 
     @classmethod
-    def _remap_type(cls, field: Any) -> Any:
-        return cls.PYTHON_TO_JSON.get(cls._base_type(field.type), "string")
+    def _map_type_internal(cls, field_type: Any) -> str:
+        """Map a Python type to a JSON schema type.
+
+        Args:
+            field_type: The Python type to map.
+
+        Returns:
+            The JSON schema type, in string form.
+
+        Raises:
+            ValueError: If the type is not supported.
+
+        Examples:
+            >>> JSONSchema._map_type_internal(int)
+            {'type': 'integer'}
+            >>> JSONSchema._map_type_internal(list[float])
+            {'type': 'array', 'items': {'type': 'number'}}
+            >>> JSONSchema._map_type_internal(str)
+            {'type': 'string'}
+            >>> JSONSchema._map_type_internal(list[datetime.datetime])
+            {'type': 'array', 'items': {'type': 'string', 'format': 'date-time'}}
+            >>> JSONSchema._map_type_internal("integer")
+            {'type': 'integer'}
+            >>> JSONSchema._map_type_internal((int, str))
+            Traceback (most recent call last):
+                ...
+            ValueError: Unsupported type: (<class 'int'>, <class 'str'>)
+        """
+
+        origin = get_origin(field_type)
+
+        if origin is list:
+            args = get_args(field_type)
+            return {"type": "array", "items": cls._map_type_internal(args[0])}
+        elif field_type is datetime.datetime or origin is datetime.datetime:
+            return {"type": "string", "format": "date-time"}
+        elif field_type in cls.PYTHON_TO_JSON:
+            return {"type": cls.PYTHON_TO_JSON[field_type]}
+        elif isinstance(field_type, str):
+            return {"type": field_type}
+        else:
+            raise ValueError(f"Unsupported type: {field_type}")
 
     @classmethod
-    def to_json_schema(cls) -> dict[str, Any]:
+    def schema(cls) -> dict[str, Any]:
         schema_properties = {}
         required_fields = []
 
         for f in fields(cls):
-            json_type = cls._remap_type(f)
-            base_type = cls._base_type(f.type)
-
-            property_schema = {"type": json_type}
-
-            # Special handling for datetime
-            if base_type is datetime.datetime:
-                property_schema["format"] = "date-time"
-
-            schema_properties[f.name] = property_schema
+            schema_properties[f.name] = cls.map_type(f)
 
             if not cls._is_optional(f.type):
                 required_fields.append(f.name)

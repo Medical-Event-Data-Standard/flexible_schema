@@ -9,6 +9,8 @@ def test_schema_with_extra_cols():
         subject_id: int
         foo: str | None = None
 
+    assert Sample.schema() == {"subject_id": int, "foo": str}
+
     sample = Sample(subject_id=1)
     assert sample["subject_id"] == 1
     assert sample.to_dict() == {"subject_id": 1}

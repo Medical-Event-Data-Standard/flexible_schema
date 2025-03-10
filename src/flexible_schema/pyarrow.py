@@ -38,14 +38,17 @@ class PyArrowSchema(Schema):
         'parent_codes'
         >>> Data.parent_codes_dtype
         ListType(list<item: string>)
-        >>> data = Data(subject_id=1, time=datetime.datetime(2025, 3, 7, 16), code="A", numeric_value=1.0)
-        >>> data # doctest: +NORMALIZE_WHITESPACE
-        Data(subject_id=1,
-             time=datetime.datetime(2025, 3, 7, 16, 0),
-             code='A',
-             numeric_value=1.0,
-             text_value=None,
-             parent_codes=None)
+
+        You can get the direct schema:
+
+        >>> Data.schema() # doctest: +NORMALIZE_WHITESPACE
+        subject_id: int64
+        time: timestamp[us]
+        code: string
+        numeric_value: float
+        text_value: string
+        parent_codes: list<item: string>
+          child 0, item: string
 
         You can also validate tables with this class
 
@@ -196,6 +199,25 @@ class PyArrowSchema(Schema):
         Traceback (most recent call last):
             ...
         ValueError: Unsupported type: dict[str, str]
+
+        Even though this is a PyArrow-based schema, you can still use it as a dataclass:
+
+        >>> class Data(PyArrowSchema):
+        ...     allow_extra_columns: ClassVar[bool] = True
+        ...     subject_id: int
+        ...     time: datetime.datetime
+        ...     code: str
+        ...     numeric_value: float | None = None
+        ...     text_value: str | None = None
+        ...     parent_codes: list[str] | None = None
+        >>> data = Data(subject_id=1, time=datetime.datetime(2025, 3, 7, 16), code="A", numeric_value=1.0)
+        >>> data # doctest: +NORMALIZE_WHITESPACE
+        Data(subject_id=1,
+             time=datetime.datetime(2025, 3, 7, 16, 0),
+             code='A',
+             numeric_value=1.0,
+             text_value=None,
+             parent_codes=None)
     """
 
     PYTHON_TO_PYARROW: ClassVar[dict[Any, pa.DataType]] = {
@@ -204,26 +226,25 @@ class PyArrowSchema(Schema):
         str: pa.string(),
         bool: pa.bool_(),
         datetime.datetime: pa.timestamp("us"),
-        list[str]: pa.list_(pa.string()),  # This likely won't work
     }
 
     @classmethod
-    def _remap_type(cls, field: Any) -> pa.DataType | None:
-        return cls._remap_type_internal(cls._base_type(field.type))
-
-    @classmethod
-    def _remap_type_internal(cls, field_type: Any) -> pa.DataType:
+    def _map_type_internal(cls, field_type: Any) -> pa.DataType:
         origin = get_origin(field_type)
 
         if origin is list:
             args = get_args(field_type)
-            return pa.list_(cls._remap_type_internal(args[0]))
+            return pa.list_(cls._map_type_internal(args[0]))
         elif field_type in cls.PYTHON_TO_PYARROW:
             return cls.PYTHON_TO_PYARROW[field_type]
         elif isinstance(field_type, pa.DataType):
             return field_type
         else:
             raise ValueError(f"Unsupported type: {field_type}")
+
+    @classmethod
+    def schema(cls) -> pa.Schema:
+        return pa.schema([(f.name, cls.map_type(f)) for f in fields(cls)])
 
     @classmethod
     def validate(
@@ -247,7 +268,7 @@ class PyArrowSchema(Schema):
         for f in fields(cls):
             if f.name not in table_cols:
                 length = table.num_rows
-                arrow_type = cls._remap_type(f)
+                arrow_type = cls.map_type(f)
                 table = table.append_column(f.name, pa.array([None] * length, type=arrow_type))
 
         # Reorder columns
@@ -260,7 +281,7 @@ class PyArrowSchema(Schema):
         # Cast columns if needed
         if cast_types:
             for f in fields(cls):
-                expected_type = cls._remap_type(f)
+                expected_type = cls.map_type(f)
                 current_type = table.schema.field(f.name).type
                 if current_type != expected_type:
                     try:

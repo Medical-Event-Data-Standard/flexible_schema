@@ -47,7 +47,7 @@ class SchemaMeta(type):
         for f in fields(cls):
             field_names.append(f.name)
             setattr(cls, f"{f.name}_name", f.name)
-            remapped_type = cls._remap_type(f)
+            remapped_type = cls.map_type(f)
             setattr(cls, f"{f.name}_dtype", remapped_type)
 
         old_init = cls.__init__
@@ -133,6 +133,17 @@ class Schema(metaclass=SchemaMeta):
             return annotation
 
     @classmethod
-    def _remap_type(cls, field):
+    def map_type(cls, field):
         """For the base class, we don't do any remapping."""
-        return cls._base_type(field.type)
+        return cls._map_type_internal(cls._base_type(field.type))
+
+    @classmethod
+    def _map_type_internal(cls, field_type: Any) -> Any:
+        return field_type
+
+    @classmethod
+    def schema(cls):
+        out = {}
+        for f in fields(cls):
+            out[f.name] = cls.map_type(f)
+        return out
