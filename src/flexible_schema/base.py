@@ -2,11 +2,39 @@
 
 import types
 from dataclasses import dataclass, fields
-from typing import ClassVar, Union, get_args, get_origin
+from typing import Any, ClassVar, Union, get_args, get_origin
 
 
 class SchemaValidationError(Exception):
     pass
+
+
+class Optional:
+    """A class to represent optional types in a schema.
+
+    Examples:
+        >>> O = Optional(int)
+        >>> print(O)
+        Optional(int)
+        >>> O.type
+        <class 'int'>
+        >>> O.default is None
+        True
+        >>> Optional(int, default=42)
+        Optional(int, default=42)
+    """
+
+    def __init__(self, type_: Any, default: Any = None):
+        self.type = type_
+        self.default = default
+
+    def __repr__(self):
+        t_str = self.type.__name__ if hasattr(self.type, "__name__") else repr(self.type)
+
+        if self.default is not None:
+            return f"Optional({t_str}, default={self.default})"
+        else:
+            return f"Optional({t_str})"
 
 
 class SchemaMeta(type):
@@ -58,10 +86,10 @@ class SchemaMeta(type):
 class Schema(metaclass=SchemaMeta):
     allow_extra_columns: ClassVar[bool] = True
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str):
         return getattr(self, key)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Any):
         if hasattr(self, key) or self.allow_extra_columns:
             setattr(self, key, value)
         else:
@@ -77,7 +105,7 @@ class Schema(metaclass=SchemaMeta):
         return {k: v for k, v in self.__dict__.items() if v is not None}
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: dict):
         return cls(**data)
 
     def items(self):
@@ -87,12 +115,24 @@ class Schema(metaclass=SchemaMeta):
         return iter(self.keys())
 
     @classmethod
-    def _is_optional(cls, annotation) -> bool:
+    def _is_optional(cls, annotation: Any) -> bool:
+        if isinstance(annotation, Optional):
+            return True
+
         origin = get_origin(annotation)
 
         return (origin is Union or origin is types.UnionType) and type(None) in get_args(annotation)
 
     @classmethod
+    def _base_type(cls, annotation: Any) -> Any:
+        if isinstance(annotation, Optional):
+            return annotation.type
+        elif cls._is_optional(annotation):
+            return next(a for a in get_args(annotation) if a is not type(None))
+        else:
+            return annotation
+
+    @classmethod
     def _remap_type(cls, field):
         """For the base class, we don't do any remapping."""
-        return field.type
+        return cls._base_type(field.type)

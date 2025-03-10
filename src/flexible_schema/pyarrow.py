@@ -144,21 +144,27 @@ class PyArrowSchema(Schema):
 
         You can also specify type hints directly using PyArrow types:
 
+        >>> from flexible_schema import Optional
         >>> class Data(PyArrowSchema):
         ...     allow_extra_columns: ClassVar[bool] = False
         ...     subject_id: pa.int64()
         ...     code: str
+        ...     numeric_value: Optional(pa.float32()) = None
         >>> Data.subject_id_dtype
         DataType(int64)
         >>> Data.code_dtype
         DataType(string)
+        >>> Data.numeric_value_dtype
+        DataType(float)
         >>> Data.validate(pa.Table.from_pydict({"subject_id": [4, 5], "code": ["D", "E"]}))
         pyarrow.Table
         subject_id: int64
         code: string
+        numeric_value: float
         ----
         subject_id: [[4,5]]
         code: [["D","E"]]
+        numeric_value: [[null,null]]
 
         Errors will be raised when extra columns are present inapproriately or mandatory columns are missing:
 
@@ -203,8 +209,7 @@ class PyArrowSchema(Schema):
 
     @classmethod
     def _remap_type(cls, field: Any) -> pa.DataType | None:
-        field_type = get_args(field.type)[0] if cls._is_optional(field.type) else field.type
-        return cls._remap_type_internal(field_type)
+        return cls._remap_type_internal(cls._base_type(field.type))
 
     @classmethod
     def _remap_type_internal(cls, field_type: Any) -> pa.DataType:

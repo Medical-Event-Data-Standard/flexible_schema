@@ -2,7 +2,7 @@
 
 import datetime
 from dataclasses import fields
-from typing import Any, ClassVar, get_args
+from typing import Any, ClassVar
 
 from .base import Schema
 
@@ -52,8 +52,7 @@ class JSONSchema(Schema):
 
     @classmethod
     def _remap_type(cls, field: Any) -> Any:
-        field_type = get_args(field.type)[0] if cls._is_optional(field.type) else field.type
-        return cls.PYTHON_TO_JSON.get(field_type, "string")
+        return cls.PYTHON_TO_JSON.get(cls._base_type(field.type), "string")
 
     @classmethod
     def to_json_schema(cls) -> dict[str, Any]:
@@ -62,7 +61,7 @@ class JSONSchema(Schema):
 
         for f in fields(cls):
             json_type = cls._remap_type(f)
-            base_type = get_args(f.type)[0] if cls._is_optional(f.type) else f.type
+            base_type = cls._base_type(f.type)
 
             property_schema = {"type": json_type}
 
