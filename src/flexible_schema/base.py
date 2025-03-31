@@ -13,6 +13,7 @@ class Optional:
     """A class to represent optional types in a schema.
 
     Examples:
+
         >>> O = Optional(int)
         >>> print(O)
         Optional(int)

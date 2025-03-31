@@ -15,7 +15,8 @@ class JSONSchema(Schema):
     to validate and reformat PyArrow tables to a validated form, or used for type-safe dictionary-like usage
     of data conforming to the schema.
 
-    Example usage:
+    Examples:
+
         >>> class Data(JSONSchema):
         ...     allow_extra_columns: ClassVar[bool] = True
         ...     subject_id: int

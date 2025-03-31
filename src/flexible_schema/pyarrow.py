@@ -17,7 +17,8 @@ class PyArrowSchema(Schema):
     to validate and reformat PyArrow tables to a validated form, or used for type-safe dictionary-like usage
     of data conforming to the schema.
 
-    Example usage:
+    Examples:
+
         >>> class Data(PyArrowSchema):
         ...     allow_extra_columns: ClassVar[bool] = True
         ...     subject_id: int
@@ -39,7 +40,7 @@ class PyArrowSchema(Schema):
         >>> Data.parent_codes_dtype
         ListType(list<item: string>)
 
-        You can get the direct schema:
+    You can get the direct schema:
 
         >>> Data.schema() # doctest: +NORMALIZE_WHITESPACE
         subject_id: int64
@@ -50,7 +51,7 @@ class PyArrowSchema(Schema):
         parent_codes: list<item: string>
           child 0, item: string
 
-        You can also validate tables with this class
+    You can also validate tables with this class
 
         >>> data_tbl = pa.Table.from_pydict({
         ...     "subject_id": [1, 2, 3],
@@ -78,7 +79,7 @@ class PyArrowSchema(Schema):
         text_value: [[null,null,null]]
         parent_codes: [[null,null,null]]
 
-        Including casting and reordering columns:
+    Including casting and reordering columns:
 
         >>> data_tbl = pa.Table.from_pydict({
         ...     "time": [
@@ -112,7 +113,7 @@ class PyArrowSchema(Schema):
         text_value: [[null,null,null]]
         parent_codes: [[null,null,null]]
 
-        And handling extra columns:
+    And handling extra columns:
 
         >>> data_tbl_with_extra = pa.Table.from_pydict({
         ...     "time": [
@@ -145,7 +146,7 @@ class PyArrowSchema(Schema):
         extra_1: [["extra1","extra2"]]
         extra_2: [[452,11]]
 
-        You can also specify type hints directly using PyArrow types:
+    You can also specify type hints directly using PyArrow types:
 
         >>> from flexible_schema import Optional
         >>> class Data(PyArrowSchema):
@@ -169,7 +170,7 @@ class PyArrowSchema(Schema):
         code: [["D","E"]]
         numeric_value: [[null,null]]
 
-        Errors will be raised when extra columns are present inapproriately or mandatory columns are missing:
+    Errors will be raised when extra columns are present inapproriately or mandatory columns are missing:
 
         >>> data_tbl_with_extra = pa.Table.from_pydict({
         ...     "subject_id": [4, 5],
@@ -185,14 +186,14 @@ class PyArrowSchema(Schema):
             ...
         flexible_schema.base.SchemaValidationError: Missing mandatory columns: {'code'}
 
-        Or when columns can't be cast properly:
+    Or when columns can't be cast properly:
 
         >>> Data.validate(pa.Table.from_pydict({"subject_id": ["A", "B"], "code": ["D", "E"]}))
         Traceback (most recent call last):
             ...
         flexible_schema.base.SchemaValidationError: Column 'subject_id' cast failed: ...
 
-        Not all types are supported
+    Not all types are supported
 
         >>> class Data(PyArrowSchema):
         ...     foo: dict[str, str]
@@ -200,7 +201,7 @@ class PyArrowSchema(Schema):
             ...
         ValueError: Unsupported type: dict[str, str]
 
-        Even though this is a PyArrow-based schema, you can still use it as a dataclass:
+    Even though this is a PyArrow-based schema, you can still use it as a dataclass:
 
         >>> class Data(PyArrowSchema):
         ...     allow_extra_columns: ClassVar[bool] = True
