@@ -70,7 +70,7 @@ class SchemaMeta(type):
             extra = {k: v for k, v in out_kwargs.items() if k not in field_names}
 
             if not (hasattr(cls, "allow_extra_columns") and cls.allow_extra_columns) and extra:
-                err_str = ", ".join(repr(k) for k in extra.keys())
+                err_str = ", ".join(repr(k) for k in extra)
                 raise SchemaValidationError(
                     f"{cls.__name__} does not allow extra columns, but got: {err_str}"
                 )
@@ -94,7 +94,7 @@ class Schema(metaclass=SchemaMeta):
         if hasattr(self, key) or self.allow_extra_columns:
             setattr(self, key, value)
         else:
-            raise SchemaValidationError(f"Extra field not allowed: {repr(key)}")
+            raise SchemaValidationError(f"Extra field not allowed: {key!r}")
 
     def keys(self):
         return self.to_dict().keys()
