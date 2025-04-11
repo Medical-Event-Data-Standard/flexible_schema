@@ -39,7 +39,11 @@ def test_schema_with_extra_cols():
     assert sample_3 == Sample(1, "bar", extra="extra")
 
     assert list(sample_3.keys()) == ["subject_id", "foo", "extra"]
-    assert list(sample_3.items()) == [("subject_id", 1), ("foo", "bar"), ("extra", "extra")]
+    assert list(sample_3.items()) == [
+        ("subject_id", 1),
+        ("foo", "bar"),
+        ("extra", "extra"),
+    ]
     assert list(sample_3) == ["subject_id", "foo", "extra"]
     assert list(sample_3.values()) == [1, "bar", "extra"]
 
