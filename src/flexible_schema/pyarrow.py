@@ -191,7 +191,7 @@ class PyArrowSchema(Schema):
         >>> Data.validate(pa.Table.from_pydict({"subject_id": ["A", "B"], "code": ["D", "E"]}))
         Traceback (most recent call last):
             ...
-        flexible_schema.base.SchemaValidationError: Column 'subject_id' cast failed: ...
+        flexible_schema.base.SchemaValidationError: Column 'subject_id' cast failed
 
     Not all types are supported
 
@@ -292,6 +292,6 @@ class PyArrowSchema(Schema):
                             table.column(f.name).cast(expected_type),
                         )
                     except pa.ArrowInvalid as e:
-                        raise SchemaValidationError(f"Column '{f.name}' cast failed: {e}")
+                        raise SchemaValidationError(f"Column '{f.name}' cast failed") from e
 
         return table
