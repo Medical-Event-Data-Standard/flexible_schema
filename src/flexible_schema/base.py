@@ -1,12 +1,18 @@
 """A simple class for flexible schema definition and usage."""
 
 import types
-from dataclasses import dataclass, fields
-from typing import Any, ClassVar, Union, get_args, get_origin
+from abc import ABCMeta, abstractmethod
+from dataclasses import Field, dataclass, fields
+from typing import Any, ClassVar, Generic, TypeVar, Union, get_args, get_origin
 
 
 class SchemaValidationError(Exception):
     pass
+
+
+RawDataType_T = TypeVar("RawDataType_T")
+RawSchema_T = TypeVar("RawSchema_T")
+FieldType = type | Any
 
 
 class Optional:
@@ -25,7 +31,7 @@ class Optional:
         Optional(int, default=42)
     """
 
-    def __init__(self, type_: Any, default: Any = None):
+    def __init__(self, type_: FieldType, default: FieldType | None = None):
         self.type = type_
         self.default = default
 
@@ -34,7 +40,7 @@ class Optional:
         return f"Optional({t_str})" if self.default is None else f"Optional({t_str}, default={self.default})"
 
 
-class SchemaMeta(type):
+class SchemaMeta(ABCMeta):
     def __new__(mcs, name, bases, namespace):
         cls = super().__new__(mcs, name, bases, namespace)
         cls = dataclass(cls)  # explicitly turn cls into a dataclass here
@@ -80,7 +86,7 @@ class SchemaMeta(type):
         return cls
 
 
-class Schema(metaclass=SchemaMeta):
+class Schema(Generic[RawDataType_T, RawSchema_T], metaclass=SchemaMeta):
     allow_extra_columns: ClassVar[bool] = True
 
     def __getitem__(self, key: str):
@@ -112,7 +118,7 @@ class Schema(metaclass=SchemaMeta):
         return iter(self.keys())
 
     @classmethod
-    def _is_optional(cls, annotation: Any) -> bool:
+    def _is_optional(cls, annotation: Optional | FieldType) -> bool:
         if isinstance(annotation, Optional):
             return True
 
@@ -121,7 +127,7 @@ class Schema(metaclass=SchemaMeta):
         return (origin is Union or origin is types.UnionType) and type(None) in get_args(annotation)
 
     @classmethod
-    def _base_type(cls, annotation: Any) -> Any:
+    def _base_type(cls, annotation: Optional | FieldType) -> Any:
         if isinstance(annotation, Optional):
             return annotation.type
         elif cls._is_optional(annotation):
@@ -130,17 +136,18 @@ class Schema(metaclass=SchemaMeta):
             return annotation
 
     @classmethod
-    def map_type(cls, field):
+    def map_type(cls, field: Field) -> RawDataType_T:
         """For the base class, we don't do any remapping."""
         return cls._map_type_internal(cls._base_type(field.type))
 
     @classmethod
-    def _map_type_internal(cls, field_type: Any) -> Any:
-        return field_type
+    @abstractmethod
+    def _map_type_internal(cls, field_type: FieldType) -> RawDataType_T:
+        """This method should be overridden by subclasses to provide type mapping."""
+        raise NotImplementedError("Subclasses must implement this method.")
 
     @classmethod
-    def schema(cls):
-        out = {}
-        for f in fields(cls):
-            out[f.name] = cls.map_type(f)
-        return out
+    @abstractmethod
+    def schema(cls) -> RawSchema_T:
+        """Return the schema."""
+        raise NotImplementedError("Subclasses must implement this method.")

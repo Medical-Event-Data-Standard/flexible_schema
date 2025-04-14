@@ -1,4 +1,5 @@
-from typing import ClassVar
+from dataclasses import fields
+from typing import Any, ClassVar
 
 from flexible_schema import Schema, SchemaValidationError
 
@@ -8,6 +9,14 @@ def test_schema_with_extra_cols():
         allow_extra_columns: ClassVar[bool] = True
         subject_id: int
         foo: str | None = None
+
+        @classmethod
+        def _map_type_internal(cls, field_type: Any) -> Any:
+            return field_type
+
+        @classmethod
+        def schema(cls):
+            return {f.name: cls.map_type(f) for f in fields(cls)}
 
     assert Sample.schema() == {"subject_id": int, "foo": str}
 
@@ -57,6 +66,14 @@ def test_schema_no_extra_cols():
         subject_id: int
         foo: str | None = None
 
+        @classmethod
+        def _map_type_internal(cls, field_type: Any) -> Any:
+            return field_type
+
+        @classmethod
+        def schema(cls):
+            return {f.name: cls.map_type(f) for f in fields(cls)}
+
     sample = Sample(subject_id=1)
     assert sample.to_dict() == {"subject_id": 1}
 
@@ -84,6 +101,14 @@ def test_errors():
         allow_extra_columns: ClassVar[bool] = False
         subject_id: int
         foo: str | None = None
+
+        @classmethod
+        def _map_type_internal(cls, field_type: Any) -> Any:
+            return field_type
+
+        @classmethod
+        def schema(cls):
+            return {f.name: cls.map_type(f) for f in fields(cls)}
 
     try:
         Sample(1, 2, 3)
