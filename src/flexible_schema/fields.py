@@ -42,8 +42,6 @@ class Column:
 
     dtype: ColumnDType
     default: ColumnDType | None = None
-    _nullable: bool | Nullability
-    _is_optional: bool = False
     name: str = "???"
 
     def __init__(
