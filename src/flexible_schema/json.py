@@ -7,7 +7,7 @@ from typing import Any, ClassVar, get_args, get_origin
 from .base import Schema
 
 
-class JSONSchema(Schema):
+class JSONSchema(Schema[Any, dict[str, Any]]):
     """A flexible mixin Schema class for easy definition of flexible, readable schemas.
 
     To use this class, initiate a subclass with the desired fields as dataclass fields. Fields will be
