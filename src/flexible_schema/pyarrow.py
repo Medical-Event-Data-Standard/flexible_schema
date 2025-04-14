@@ -9,7 +9,8 @@ import pyarrow as pa
 from .base import Schema, SchemaValidationError
 
 
-class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
+# A Schema is a generic that takes a RawDataType_T, RawSchema_T, and a RawTable_T
+class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
     """A PyArrow-based schema class for flexible schema definition and usage.
 
     To use this class, initiate a subclass with the desired fields as dataclass fields. Fields will be
@@ -18,7 +19,6 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
     of data conforming to the schema.
 
     Examples:
-
         >>> class Data(PyArrowSchema):
         ...     allow_extra_columns: ClassVar[bool] = True
         ...     subject_id: int
@@ -62,7 +62,7 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         ...     ],
         ...     "code": ["A", "B", "C"],
         ... })
-        >>> Data.validate(data_tbl)
+        >>> Data.old_validate(data_tbl)
         pyarrow.Table
         subject_id: int64
         time: timestamp[us]
@@ -96,7 +96,7 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         ...         pa.field("code", pa.string()),
         ...     ]
         ... ))
-        >>> Data.validate(data_tbl)
+        >>> Data.old_validate(data_tbl)
         pyarrow.Table
         subject_id: int64
         time: timestamp[us]
@@ -125,7 +125,7 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         ...     "extra_2": [452, 11],
         ...     "code": ["D", "E"],
         ... })
-        >>> Data.validate(data_tbl_with_extra)
+        >>> Data.old_validate(data_tbl_with_extra)
         pyarrow.Table
         subject_id: int64
         time: timestamp[us]
@@ -160,7 +160,7 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         DataType(string)
         >>> Data.numeric_value_dtype
         DataType(float)
-        >>> Data.validate(pa.Table.from_pydict({"subject_id": [4, 5], "code": ["D", "E"]}))
+        >>> Data.old_validate(pa.Table.from_pydict({"subject_id": [4, 5], "code": ["D", "E"]}))
         pyarrow.Table
         subject_id: int64
         code: string
@@ -177,18 +177,18 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         ...     "code": ["D", "E"],
         ...     "extra_1": ["extra1", "extra2"],
         ... })
-        >>> Data.validate(data_tbl_with_extra)
+        >>> Data.old_validate(data_tbl_with_extra)
         Traceback (most recent call last):
             ...
         flexible_schema.base.SchemaValidationError: Unexpected extra columns: {'extra_1'}
-        >>> Data.validate(pa.Table.from_pydict({ "subject_id": [4, 5], }))
+        >>> Data.old_validate(pa.Table.from_pydict({ "subject_id": [4, 5], }))
         Traceback (most recent call last):
             ...
         flexible_schema.base.SchemaValidationError: Missing mandatory columns: {'code'}
 
     Or when columns can't be cast properly:
 
-        >>> Data.validate(pa.Table.from_pydict({"subject_id": ["A", "B"], "code": ["D", "E"]}))
+        >>> Data.old_validate(pa.Table.from_pydict({"subject_id": ["A", "B"], "code": ["D", "E"]}))
         Traceback (most recent call last):
             ...
         flexible_schema.base.SchemaValidationError: Column 'subject_id' cast failed
@@ -248,7 +248,19 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         return pa.schema([(f.name, cls.map_type(f)) for f in fields(cls)])
 
     @classmethod
-    def validate(
+    def _raw_schema_col_type(cls, schema: pa.Schema, col: str) -> pa.DataType:
+        return schema.field(col).type
+
+    @classmethod
+    def _raw_schema_cols(cls, schema: pa.Schema) -> list[str]:
+        return schema.names
+
+    @classmethod
+    def _raw_table_schema(cls, table: pa.Table) -> pa.Schema:
+        return table.schema
+
+    @classmethod
+    def old_validate(
         cls,
         table: pa.Table,
         reorder_columns: bool = True,
