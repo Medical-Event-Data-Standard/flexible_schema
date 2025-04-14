@@ -31,11 +31,7 @@ class Optional:
 
     def __repr__(self):
         t_str = self.type.__name__ if hasattr(self.type, "__name__") else repr(self.type)
-
-        if self.default is not None:
-            return f"Optional({t_str}, default={self.default})"
-        else:
-            return f"Optional({t_str})"
+        return f"Optional({t_str})" if self.default is None else f"Optional({t_str}, default={self.default})"
 
 
 class SchemaMeta(type):
