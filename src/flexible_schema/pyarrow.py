@@ -9,7 +9,7 @@ import pyarrow as pa
 from .base import Schema, SchemaValidationError
 
 
-class PyArrowSchema(Schema):
+class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
     """A PyArrow-based schema class for flexible schema definition and usage.
 
     To use this class, initiate a subclass with the desired fields as dataclass fields. Fields will be
