@@ -1,4 +1,4 @@
-"""A simple class for flexible schema definition and usage."""
+"""A Meta-class for defining Schemas that can be created like dataclasses and used to validate tables."""
 
 import types
 from abc import ABCMeta, abstractmethod
@@ -6,40 +6,11 @@ from dataclasses import Field, dataclass, fields
 from typing import Any, ClassVar, Generic, TypeVar, Union, get_args, get_origin
 
 from .exceptions import SchemaValidationError, TableValidationError
+from .fields import ColumnDType, Optional
 
 RawDataType_T = TypeVar("RawDataType_T")
 RawSchema_T = TypeVar("RawSchema_T")
 RawTable_T = TypeVar("RawTable_T")
-FieldType = type | Any
-
-
-class Optional:
-    """A class to represent optional types in a schema.
-
-    Examples:
-
-        >>> O = Optional(int)
-        >>> print(O)
-        Optional(int)
-        >>> O.type
-        <class 'int'>
-        >>> O.default is None
-        True
-        >>> Optional(int, default=42)
-        Optional(int, default=42)
-    """
-
-    def __init__(self, type_: FieldType, default: FieldType | None = None):
-        self.type = type_
-        self.default = default
-
-    def __repr__(self):
-        t_str = self.type.__name__ if hasattr(self.type, "__name__") else repr(self.type)
-
-        if self.default is not None:
-            return f"Optional({t_str}, default={self.default})"
-        else:
-            return f"Optional({t_str})"
 
 
 class SchemaMeta(ABCMeta):
@@ -146,17 +117,17 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
         return cls.required_columns() + cls.optional_columns()
 
     @classmethod
-    def column_type(cls: type[S], col: str) -> FieldType:
+    def column_type(cls: type[S], col: str) -> ColumnDType:
         """Return the type of a column."""
         return getattr(cls, f"{col}_dtype")
 
     @classmethod
-    def _is_required(cls: type[S], annotation: Optional | FieldType) -> bool:
+    def _is_required(cls: type[S], annotation: Optional | ColumnDType) -> bool:
         """Check if the field is required."""
         return not cls._is_optional(annotation)
 
     @classmethod
-    def _is_optional(cls: type[S], annotation: Optional | FieldType) -> bool:
+    def _is_optional(cls: type[S], annotation: Optional | ColumnDType) -> bool:
         if isinstance(annotation, Optional):
             return True
 
@@ -165,9 +136,9 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
         return (origin is Union or origin is types.UnionType) and type(None) in get_args(annotation)
 
     @classmethod
-    def _base_type(cls: type[S], annotation: Optional | FieldType) -> FieldType:
+    def _base_type(cls: type[S], annotation: Optional | ColumnDType) -> ColumnDType:
         if isinstance(annotation, Optional):
-            return annotation.type
+            return annotation.dtype
         elif cls._is_optional(annotation):
             return next(a for a in get_args(annotation) if a is not type(None))
         else:
@@ -180,7 +151,7 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
 
     @classmethod
     @abstractmethod
-    def _map_type_internal(cls: type[S], field_type: FieldType) -> RawDataType_T:
+    def _map_type_internal(cls: type[S], field_type: ColumnDType) -> RawDataType_T:
         raise NotImplementedError(f"_map_type_internal is not supported by {cls.__name__} objects.")
 
     # The schema should provide a way to produce an approximate "source schema"
@@ -194,7 +165,7 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
 
     @classmethod
     @abstractmethod
-    def _raw_schema_col_type(cls: type[S], schema: RawSchema_T, col: str) -> FieldType:
+    def _raw_schema_col_type(cls: type[S], schema: RawSchema_T, col: str) -> ColumnDType:
         """Get the type of a column in the schema."""
         raise NotImplementedError(f"__raw_schema_col_type is not supported by {cls.__name__} objects.")
 
@@ -217,7 +188,7 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
         return [col for col in cls.required_columns() if col not in set(cls._raw_schema_cols(schema))]
 
     @classmethod
-    def _mistyped_cols(cls: type[S], schema: RawSchema_T) -> list[tuple[str, FieldType, FieldType]]:
+    def _mistyped_cols(cls: type[S], schema: RawSchema_T) -> list[tuple[str, ColumnDType, ColumnDType]]:
         """Get a list of columns that have incorrect types in the schema."""
         raw_cols = set(cls._raw_schema_cols(schema))
         return [
@@ -329,12 +300,12 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
 
     @classmethod
     @abstractmethod
-    def _cast_raw_table_column(cls: type[S], tbl: RawTable_T, col: str, want_type: FieldType) -> RawTable_T:
+    def _cast_raw_table_column(cls: type[S], tbl: RawTable_T, col: str, want_type: ColumnDType) -> RawTable_T:
         raise NotImplementedError(f"_cast_raw_table_column is not supported by {cls.__name__} objects.")
 
     @classmethod
     def _cast_raw_table(
-        cls: type[S], tbl: RawTable_T, mistyped_cols: list[tuple[str, FieldType, FieldType]]
+        cls: type[S], tbl: RawTable_T, mistyped_cols: list[tuple[str, ColumnDType, ColumnDType]]
     ) -> RawTable_T:
         """Cast the columns of the table to match the schema."""
 
