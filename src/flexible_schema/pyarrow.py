@@ -6,10 +6,11 @@ from typing import Any, ClassVar, get_args, get_origin
 
 import pyarrow as pa
 
-from .base import Schema, SchemaValidationError
+from .base import Schema
 
 
-class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
+# A Schema is a generic that takes a RawDataType_T, RawSchema_T, and a RawTable_T
+class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
     """A PyArrow-based schema class for flexible schema definition and usage.
 
     To use this class, initiate a subclass with the desired fields as dataclass fields. Fields will be
@@ -18,7 +19,6 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
     of data conforming to the schema.
 
     Examples:
-
         >>> class Data(PyArrowSchema):
         ...     allow_extra_columns: ClassVar[bool] = True
         ...     subject_id: int
@@ -51,6 +51,22 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         parent_codes: list<item: string>
           child 0, item: string
 
+    You can also validate that a query schema is valid against this schema with the `validate` method. This
+    method accounts for optional column type specification and the open-ness or closed-ness of the schema
+    (e.g., does it allow extra columns):
+
+        >>> query_schema = pa.schema([
+        ...     pa.field("subject_id", pa.int64()), pa.field("time", pa.timestamp("us")),
+        ...     pa.field("code", pa.string()), pa.field("numeric_value", pa.float32()),
+        ...     pa.field("extra", pa.string()),
+        ... ])
+        >>> Data.validate(query_schema) # No issues
+        >>> Data.allow_extra_columns = False
+        >>> Data.validate(query_schema)
+        Traceback (most recent call last):
+            ...
+        flexible_schema.exceptions.SchemaValidationError: Disallowed extra columns: extra
+
     You can also validate tables with this class
 
         >>> data_tbl = pa.Table.from_pydict({
@@ -62,25 +78,30 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         ...     ],
         ...     "code": ["A", "B", "C"],
         ... })
+        >>> Data.validate(data_tbl) # No issues
+        >>> data_tbl = pa.Table.from_pydict({
+        ...     "subject_id": ["1", "2", "3"],
+        ...     "time": [
+        ...         datetime.datetime(2021, 3, 1),
+        ...         datetime.datetime(2021, 4, 1),
+        ...         datetime.datetime(2021, 5, 1),
+        ...     ],
+        ...     "code": ["A", "B", "C"],
+        ...     "text_value": [1, 2, 3],
+        ... })
         >>> Data.validate(data_tbl)
-        pyarrow.Table
-        subject_id: int64
-        time: timestamp[us]
-        code: string
-        numeric_value: float
-        text_value: string
-        parent_codes: list<item: string>
-          child 0, item: string
-        ----
-        subject_id: [[1,2,3]]
-        time: [[2021-03-01 00:00:00.000000,2021-04-01 00:00:00.000000,2021-05-01 00:00:00.000000]]
-        code: [["A","B","C"]]
-        numeric_value: [[null,null,null]]
-        text_value: [[null,null,null]]
-        parent_codes: [[null,null,null]]
+        Traceback (most recent call last):
+            ...
+        flexible_schema.exceptions.SchemaValidationError:
+            Columns with incorrect types: subject_id (want int64, got string),
+                                          text_value (want string, got int64)
 
-    Including casting and reordering columns:
+    Beyond validation of tables (which either raises an error or returns nothing), you can also _align_ tables
+    with this class, which performs safe, no-data-change operations to convert an input table into a format
+    that is fully compliant with the schema. These changes include re-ordering of columns and casting, when it
+    can be done safely:
 
+        >>> Data.allow_extra_columns = True
         >>> data_tbl = pa.Table.from_pydict({
         ...     "time": [
         ...         datetime.datetime(2021, 3, 1),
@@ -88,63 +109,50 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         ...         datetime.datetime(2021, 5, 1),
         ...     ],
         ...     "subject_id": [1, 2, 3],
+        ...     "extra_col": ["extra1", "extra2", "extra3"],
         ...     "code": ["A", "B", "C"],
         ... }, schema=pa.schema(
         ...     [
         ...         pa.field("time", pa.timestamp("us")),
         ...         pa.field("subject_id", pa.int32()),
+        ...         pa.field("extra_col", pa.string()),
         ...         pa.field("code", pa.string()),
         ...     ]
         ... ))
-        >>> Data.validate(data_tbl)
+        >>> Data.align(data_tbl)
         pyarrow.Table
         subject_id: int64
         time: timestamp[us]
         code: string
-        numeric_value: float
-        text_value: string
-        parent_codes: list<item: string>
-          child 0, item: string
+        extra_col: string
         ----
         subject_id: [[1,2,3]]
         time: [[2021-03-01 00:00:00.000000,2021-04-01 00:00:00.000000,2021-05-01 00:00:00.000000]]
         code: [["A","B","C"]]
-        numeric_value: [[null,null,null]]
-        text_value: [[null,null,null]]
-        parent_codes: [[null,null,null]]
+        extra_col: [["extra1","extra2","extra3"]]
 
-    And handling extra columns:
+    Alignment also raises errors when the table cannot be aligned to the target schema
 
-        >>> data_tbl_with_extra = pa.Table.from_pydict({
+        >>> Data.allow_extra_columns = False
+        >>> Data.align(data_tbl)
+        Traceback (most recent call last):
+            ...
+        flexible_schema.exceptions.SchemaValidationError:
+            Disallowed extra columns: extra_col
+        >>> data_tbl = pa.Table.from_pydict({
         ...     "time": [
         ...         datetime.datetime(2021, 3, 1),
         ...         datetime.datetime(2021, 4, 1),
+        ...         datetime.datetime(2021, 5, 1),
         ...     ],
-        ...     "subject_id": [4, 5],
-        ...     "extra_1": ["extra1", "extra2"],
-        ...     "extra_2": [452, 11],
-        ...     "code": ["D", "E"],
+        ...     "subject_id": ["foo", "bar", "baz"],
+        ...     "code": ["A", "B", "C"],
         ... })
-        >>> Data.validate(data_tbl_with_extra)
-        pyarrow.Table
-        subject_id: int64
-        time: timestamp[us]
-        code: string
-        numeric_value: float
-        text_value: string
-        parent_codes: list<item: string>
-          child 0, item: string
-        extra_1: string
-        extra_2: int64
-        ----
-        subject_id: [[4,5]]
-        time: [[2021-03-01 00:00:00.000000,2021-04-01 00:00:00.000000]]
-        code: [["D","E"]]
-        numeric_value: [[null,null]]
-        text_value: [[null,null]]
-        parent_codes: [[null,null]]
-        extra_1: [["extra1","extra2"]]
-        extra_2: [[452,11]]
+        >>> Data.align(data_tbl)
+        Traceback (most recent call last):
+            ...
+        flexible_schema.exceptions.SchemaValidationError:
+            Columns with incorrect types: subject_id (want int64, got string)
 
     You can also specify type hints directly using PyArrow types:
 
@@ -160,38 +168,13 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         DataType(string)
         >>> Data.numeric_value_dtype
         DataType(float)
-        >>> Data.validate(pa.Table.from_pydict({"subject_id": [4, 5], "code": ["D", "E"]}))
+        >>> Data.align(pa.Table.from_pydict({"subject_id": [4, 5], "code": ["D", "E"]}))
         pyarrow.Table
         subject_id: int64
         code: string
-        numeric_value: float
         ----
         subject_id: [[4,5]]
         code: [["D","E"]]
-        numeric_value: [[null,null]]
-
-    Errors will be raised when extra columns are present inapproriately or mandatory columns are missing:
-
-        >>> data_tbl_with_extra = pa.Table.from_pydict({
-        ...     "subject_id": [4, 5],
-        ...     "code": ["D", "E"],
-        ...     "extra_1": ["extra1", "extra2"],
-        ... })
-        >>> Data.validate(data_tbl_with_extra)
-        Traceback (most recent call last):
-            ...
-        flexible_schema.base.SchemaValidationError: Unexpected extra columns: {'extra_1'}
-        >>> Data.validate(pa.Table.from_pydict({ "subject_id": [4, 5], }))
-        Traceback (most recent call last):
-            ...
-        flexible_schema.base.SchemaValidationError: Missing mandatory columns: {'code'}
-
-    Or when columns can't be cast properly:
-
-        >>> Data.validate(pa.Table.from_pydict({"subject_id": ["A", "B"], "code": ["D", "E"]}))
-        Traceback (most recent call last):
-            ...
-        flexible_schema.base.SchemaValidationError: Column 'subject_id' cast failed
 
     Not all types are supported
 
@@ -212,7 +195,7 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         ...     text_value: str | None = None
         ...     parent_codes: list[str] | None = None
         >>> data = Data(subject_id=1, time=datetime.datetime(2025, 3, 7, 16), code="A", numeric_value=1.0)
-        >>> data # doctest: +NORMALIZE_WHITESPACE
+        >>> data
         Data(subject_id=1,
              time=datetime.datetime(2025, 3, 7, 16, 0),
              code='A',
@@ -248,50 +231,21 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema]):
         return pa.schema([(f.name, cls.map_type(f)) for f in fields(cls)])
 
     @classmethod
-    def validate(
-        cls,
-        table: pa.Table,
-        reorder_columns: bool = True,
-        cast_types: bool = True,
-    ) -> pa.Table:
-        table_cols = set(table.column_names)
-        mandatory_cols = {f.name for f in fields(cls) if not cls._is_optional(f.type)}
-        all_defined_cols = {f.name for f in fields(cls)}
+    def _raw_schema_col_type(cls, schema: pa.Schema, col: str) -> pa.DataType:
+        return schema.field(col).type
 
-        missing_cols = mandatory_cols - table_cols
-        if missing_cols:
-            raise SchemaValidationError(f"Missing mandatory columns: {missing_cols}")
+    @classmethod
+    def _raw_schema_cols(cls, schema: pa.Schema) -> list[str]:
+        return schema.names
 
-        extra_cols = table_cols - all_defined_cols
-        if extra_cols and not cls.allow_extra_columns:
-            raise SchemaValidationError(f"Unexpected extra columns: {extra_cols}")
+    @classmethod
+    def _raw_table_schema(cls, table: pa.Table) -> pa.Schema:
+        return table.schema
 
-        for f in fields(cls):
-            if f.name not in table_cols:
-                length = table.num_rows
-                arrow_type = cls.map_type(f)
-                table = table.append_column(f.name, pa.array([None] * length, type=arrow_type))
+    @classmethod
+    def _reorder_raw_table(cls, tbl: pa.Table, tbl_order: list[str]) -> pa.Table:
+        return tbl.select(tbl_order)
 
-        # Reorder columns
-        if reorder_columns:
-            ordered_cols = [f.name for f in fields(cls) if f.name in table.column_names]
-            if cls.allow_extra_columns:
-                ordered_cols += [c for c in table.column_names if c not in ordered_cols]
-            table = table.select(ordered_cols)
-
-        # Cast columns if needed
-        if cast_types:
-            for f in fields(cls):
-                expected_type = cls.map_type(f)
-                current_type = table.schema.field(f.name).type
-                if current_type != expected_type:
-                    try:
-                        table = table.set_column(
-                            table.schema.get_field_index(f.name),
-                            f.name,
-                            table.column(f.name).cast(expected_type),
-                        )
-                    except pa.ArrowInvalid as e:
-                        raise SchemaValidationError(f"Column '{f.name}' cast failed") from e
-
-        return table
+    @classmethod
+    def _cast_raw_table_column(cls, tbl: pa.Table, col: str, want_type: pa.DataType) -> pa.Table:
+        return tbl.set_column(tbl.schema.get_field_index(col), col, tbl.column(col).cast(want_type))
