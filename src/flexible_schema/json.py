@@ -2,7 +2,6 @@
 
 import datetime
 import logging
-from dataclasses import fields
 from typing import Any, ClassVar, get_args, get_origin
 
 from jsonschema import Draft202012Validator, validate
@@ -147,7 +146,7 @@ class JSONSchema(Schema[Any, JSON_Schema_T, JSON_blob_T]):
     }
 
     @classmethod
-    def _map_type_internal(cls, field_type: Any) -> str:
+    def map_type(cls, field_type: Any) -> str:
         """Map a Python type to a JSON schema type.
 
         Args:
@@ -160,17 +159,17 @@ class JSONSchema(Schema[Any, JSON_Schema_T, JSON_blob_T]):
             ValueError: If the type is not supported.
 
         Examples:
-            >>> JSONSchema._map_type_internal(int)
+            >>> JSONSchema.map_type(int)
             {'type': 'integer'}
-            >>> JSONSchema._map_type_internal(list[float])
+            >>> JSONSchema.map_type(list[float])
             {'type': 'array', 'items': {'type': 'number'}}
-            >>> JSONSchema._map_type_internal(str)
+            >>> JSONSchema.map_type(str)
             {'type': 'string'}
-            >>> JSONSchema._map_type_internal(list[datetime.datetime])
+            >>> JSONSchema.map_type(list[datetime.datetime])
             {'type': 'array', 'items': {'type': 'string', 'format': 'date-time'}}
-            >>> JSONSchema._map_type_internal("integer")
+            >>> JSONSchema.map_type("integer")
             {'type': 'integer'}
-            >>> JSONSchema._map_type_internal((int, str))
+            >>> JSONSchema.map_type((int, str))
             Traceback (most recent call last):
                 ...
             ValueError: Unsupported type: (<class 'int'>, <class 'str'>)
@@ -180,7 +179,7 @@ class JSONSchema(Schema[Any, JSON_Schema_T, JSON_blob_T]):
 
         if origin is list:
             args = get_args(field_type)
-            return {"type": "array", "items": cls._map_type_internal(args[0])}
+            return {"type": "array", "items": cls.map_type(args[0])}
         elif field_type is datetime.datetime or origin is datetime.datetime:
             return {"type": "string", "format": "date-time"}
         elif field_type in cls.PYTHON_TO_JSON:
@@ -195,11 +194,11 @@ class JSONSchema(Schema[Any, JSON_Schema_T, JSON_blob_T]):
         schema_properties = {}
         required_fields = []
 
-        for f in fields(cls):
-            schema_properties[f.name] = cls.map_type(f)
+        for c in cls._columns():
+            schema_properties[c.name] = c.dtype
 
-            if not cls._is_optional(f.type):
-                required_fields.append(f.name)
+            if c.is_required:
+                required_fields.append(c.name)
 
         schema = {
             "type": "object",
@@ -250,7 +249,7 @@ class JSONSchema(Schema[Any, JSON_Schema_T, JSON_blob_T]):
     def _raw_table_schema(cls, table: dict) -> Any:
         return {
             "type": "object",
-            "properties": {k: cls._map_type_internal(type(v)) for k, v in table.items()},
+            "properties": {k: cls.map_type(type(v)) for k, v in table.items()},
         }
 
     @classmethod

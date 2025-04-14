@@ -1,7 +1,6 @@
 """A simple class for flexible schema definition and usage."""
 
 import datetime
-from dataclasses import fields
 from typing import Any, ClassVar, get_args, get_origin
 
 import pyarrow as pa
@@ -213,12 +212,12 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
     }
 
     @classmethod
-    def _map_type_internal(cls, field_type: Any) -> pa.DataType:
+    def map_type(cls, field_type: Any) -> pa.DataType:
         origin = get_origin(field_type)
 
         if origin is list:
             args = get_args(field_type)
-            return pa.list_(cls._map_type_internal(args[0]))
+            return pa.list_(cls.map_type(args[0]))
         elif field_type in cls.PYTHON_TO_PYARROW:
             return cls.PYTHON_TO_PYARROW[field_type]
         elif isinstance(field_type, pa.DataType):
@@ -228,7 +227,7 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
 
     @classmethod
     def schema(cls) -> pa.Schema:
-        return pa.schema([(f.name, cls.map_type(f)) for f in fields(cls)])
+        return pa.schema([(c.name, c.dtype) for c in cls._columns()])
 
     @classmethod
     def _raw_schema_col_type(cls, schema: pa.Schema, col: str) -> pa.DataType:

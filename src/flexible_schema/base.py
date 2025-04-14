@@ -1,12 +1,11 @@
 """A Meta-class for defining Schemas that can be created like dataclasses and used to validate tables."""
 
-import types
 from abc import ABCMeta, abstractmethod
-from dataclasses import Field, dataclass, fields
-from typing import Any, ClassVar, Generic, TypeVar, Union, get_args, get_origin
+from dataclasses import dataclass, fields
+from typing import Any, ClassVar, Generic, TypeVar
 
+from .columns import Column, ColumnDType, resolve_dataclass_field
 from .exceptions import SchemaValidationError, TableValidationError
-from .fields import ColumnDType, Optional
 
 RawDataType_T = TypeVar("RawDataType_T")
 RawSchema_T = TypeVar("RawSchema_T")
@@ -19,12 +18,17 @@ class SchemaMeta(ABCMeta):
         cls = dataclass(cls)  # explicitly turn cls into a dataclass here
         # Add constants after dataclass is fully initialized
 
-        field_names = []
-        for f in fields(cls):
-            field_names.append(f.name)
-            setattr(cls, f"{f.name}_name", f.name)
-            remapped_type = cls.map_type(f)
-            setattr(cls, f"{f.name}_dtype", remapped_type)
+        cols = [resolve_dataclass_field(f, type_mapper=cls.map_type) for f in fields(cls)]
+
+        for f, c in zip(fields(cls), cols, strict=False):
+            f.metadata = {**f.metadata, "column": c}
+
+        for c in cols:
+            # Set attribute shortcuts
+            setattr(cls, f"{c.name}_name", c.name)
+            setattr(cls, f"{c.name}_dtype", c.dtype)
+
+        field_names = [c.name for c in cols]
 
         old_init = cls.__init__
 
@@ -102,14 +106,22 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
     # The schema should support type resolution and optional vs. required type determination:
 
     @classmethod
+    def _columns(cls: type[S]) -> list[Column]:
+        return [f.metadata["column"] for f in fields(cls)]
+
+    @classmethod
+    def _columns_map(cls: type[S]) -> dict[str, Column]:
+        return {c.name: c for c in cls._columns()}
+
+    @classmethod
     def optional_columns(cls: type[S]) -> list[str]:
         """Return a list of optional columns."""
-        return [f.name for f in fields(cls) if cls._is_optional(f.type)]
+        return [c.name for c in cls._columns() if c.is_optional]
 
     @classmethod
     def required_columns(cls: type[S]) -> list[str]:
         """Return a list of required columns."""
-        return [f.name for f in fields(cls) if not cls._is_optional(f.type)]
+        return [c.name for c in cls._columns() if c.is_required]
 
     @classmethod
     def columns(cls: type[S]) -> list[str]:
@@ -119,39 +131,11 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
     @classmethod
     def column_type(cls: type[S], col: str) -> ColumnDType:
         """Return the type of a column."""
-        return getattr(cls, f"{col}_dtype")
-
-    @classmethod
-    def _is_required(cls: type[S], annotation: Optional | ColumnDType) -> bool:
-        """Check if the field is required."""
-        return not cls._is_optional(annotation)
-
-    @classmethod
-    def _is_optional(cls: type[S], annotation: Optional | ColumnDType) -> bool:
-        if isinstance(annotation, Optional):
-            return True
-
-        origin = get_origin(annotation)
-
-        return (origin is Union or origin is types.UnionType) and type(None) in get_args(annotation)
-
-    @classmethod
-    def _base_type(cls: type[S], annotation: Optional | ColumnDType) -> ColumnDType:
-        if isinstance(annotation, Optional):
-            return annotation.dtype
-        elif cls._is_optional(annotation):
-            return next(a for a in get_args(annotation) if a is not type(None))
-        else:
-            return annotation
-
-    @classmethod
-    def map_type(cls: type[S], field: Field) -> RawDataType_T:
-        """For the base class, we don't do any remapping."""
-        return cls._map_type_internal(cls._base_type(field.type))
+        return cls._columns_map()[col].dtype
 
     @classmethod
     @abstractmethod
-    def _map_type_internal(cls: type[S], field_type: ColumnDType) -> RawDataType_T:
+    def map_type(cls: type[S], field_type: ColumnDType) -> RawDataType_T:
         raise NotImplementedError(f"_map_type_internal is not supported by {cls.__name__} objects.")
 
     # The schema should provide a way to produce an approximate "source schema"
@@ -289,9 +273,9 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
         table_cols = cls._raw_table_cols(tbl)
 
         out_order = []
-        for f in fields(cls):
-            if cls._is_required(f.type) or f.name in table_cols:
-                out_order.append(f.name)
+        for c in cls._columns():
+            if c.is_required or c.name in table_cols:
+                out_order.append(c.name)
 
         if cls.allow_extra_columns:
             out_order.extend([c for c in table_cols if c not in out_order])
