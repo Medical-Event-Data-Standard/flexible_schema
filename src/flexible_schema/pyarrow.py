@@ -51,6 +51,22 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
         parent_codes: list<item: string>
           child 0, item: string
 
+    You can also validate that a query schema is valid against this schema with the `validate` method. This
+    method accounts for optional column type specification and the open-ness or closed-ness of the schema
+    (e.g., does it allow extra columns):
+
+        >>> query_schema = pa.schema([
+        ...     pa.field("subject_id", pa.int64()), pa.field("time", pa.timestamp("us")),
+        ...     pa.field("code", pa.string()), pa.field("numeric_value", pa.float32()),
+        ...     pa.field("extra", pa.string()),
+        ... ])
+        >>> Data.validate(query_schema) # No issues
+        >>> Data.allow_extra_columns = False
+        >>> Data.validate(query_schema)
+        Traceback (most recent call last):
+            ...
+        flexible_schema.exceptions.SchemaValidationError: Disallowed extra columns: extra
+
     You can also validate tables with this class
 
         >>> data_tbl = pa.Table.from_pydict({
@@ -62,6 +78,25 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
         ...     ],
         ...     "code": ["A", "B", "C"],
         ... })
+        >>> Data.validate(data_tbl) # No issues
+        >>> data_tbl = pa.Table.from_pydict({
+        ...     "subject_id": ["1", "2", "3"],
+        ...     "time": [
+        ...         datetime.datetime(2021, 3, 1),
+        ...         datetime.datetime(2021, 4, 1),
+        ...         datetime.datetime(2021, 5, 1),
+        ...     ],
+        ...     "code": ["A", "B", "C"],
+        ...     "text_value": [1, 2, 3],
+        ... })
+        >>> Data.validate(data_tbl)
+        Traceback (most recent call last):
+            ...
+        flexible_schema.exceptions.SchemaValidationError:
+            Columns with incorrect types: subject_id (want int64, got string),
+                                          text_value (want string, got int64)
+
+
         >>> Data.old_validate(data_tbl)
         pyarrow.Table
         subject_id: int64

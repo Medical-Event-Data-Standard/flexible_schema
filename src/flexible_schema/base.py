@@ -291,7 +291,7 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
         else:
             try:
                 cls._validate_table(arg)
-            except TableValidationError as e:
+            except (TableValidationError, SchemaValidationError) as e:
                 raise e
             except Exception as e:
                 raise TableValidationError("Table validation failed") from e
