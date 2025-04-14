@@ -15,13 +15,15 @@ class SchemaValidationError(Exception):
         self.disallowed_extra_cols = disallowed_extra_cols
         self.missing_req_cols = missing_req_cols
         self.mistyped_cols = mistyped_cols
-        if msg is not None:
-            super().__init__(msg)
-        else:
-            super().__init__(self.msg)
+        self.msg = msg
+
+        super().__init__(self.message)
 
     @property
-    def msg(self) -> str:
+    def message(self) -> str:
+        if self.msg is not None:
+            return self.msg
+
         msg_parts = []
         if self.disallowed_extra_cols:
             msg_parts.append(f"Disallowed extra columns: {', '.join(self.disallowed_extra_cols)}")

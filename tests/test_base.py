@@ -4,9 +4,9 @@ from typing import Any, ClassVar
 from flexible_schema import Schema, SchemaValidationError
 
 
-def test_schema_with_extra_cols():
-    class Sample(Schema):
-        allow_extra_columns: ClassVar[bool] = True
+def get_sample_schema(allow_extra_columns: bool) -> Schema:
+    class Sample(Schema[type, dict[str, type], dict[str, Any]]):
+        allow_extra_columns: ClassVar[bool]
         subject_id: int
         foo: str | None = None
 
@@ -17,6 +17,36 @@ def test_schema_with_extra_cols():
         @classmethod
         def schema(cls):
             return {f.name: cls.map_type(f) for f in fields(cls)}
+
+        @classmethod
+        def _raw_schema_col_type(cls, schema: Any, col: str) -> Any:
+            return schema[col]
+
+        @classmethod
+        def _raw_table_schema(cls, table: dict) -> Any:
+            return {k: type(v) for k, v in table.items()}
+
+        @classmethod
+        def _raw_schema_cols(cls, schema: Any) -> list[str]:
+            return list(schema.keys())
+
+        @classmethod
+        def _reorder_raw_table(cls, tbl: dict, tbl_order: list[str]) -> dict:
+            return {k: tbl[k] for k in tbl_order}
+
+        @classmethod
+        def _cast_raw_table_column(cls, tbl: dict, col: str, col_type: Any) -> dict:
+            out = {**tbl}
+            out[col] = col_type(tbl[col])
+            return out
+
+    Sample.allow_extra_columns = allow_extra_columns
+
+    return Sample
+
+
+def test_schema_with_extra_cols():
+    Sample = get_sample_schema(True)  # noqa: N806
 
     assert Sample.schema() == {"subject_id": int, "foo": str}
 
@@ -61,18 +91,7 @@ def test_schema_with_extra_cols():
 
 
 def test_schema_no_extra_cols():
-    class Sample(Schema):
-        allow_extra_columns: ClassVar[bool] = False
-        subject_id: int
-        foo: str | None = None
-
-        @classmethod
-        def _map_type_internal(cls, field_type: Any) -> Any:
-            return field_type
-
-        @classmethod
-        def schema(cls):
-            return {f.name: cls.map_type(f) for f in fields(cls)}
+    Sample = get_sample_schema(False)  # noqa: N806
 
     sample = Sample(subject_id=1)
     assert sample.to_dict() == {"subject_id": 1}
@@ -97,18 +116,7 @@ def test_schema_no_extra_cols():
 
 
 def test_errors():
-    class Sample(Schema):
-        allow_extra_columns: ClassVar[bool] = False
-        subject_id: int
-        foo: str | None = None
-
-        @classmethod
-        def _map_type_internal(cls, field_type: Any) -> Any:
-            return field_type
-
-        @classmethod
-        def schema(cls):
-            return {f.name: cls.map_type(f) for f in fields(cls)}
+    Sample = get_sample_schema(False)  # noqa: N806
 
     try:
         Sample(1, 2, 3)

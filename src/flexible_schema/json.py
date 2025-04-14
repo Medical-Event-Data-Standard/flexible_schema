@@ -128,6 +128,15 @@ class JSONSchema(Schema[Any, JSON_Schema_T, JSON_blob_T]):
         Traceback (most recent call last):
             ...
         flexible_schema.exceptions.TableValidationError: Table validation failed
+
+    You can also use this class as a dataclass for type-safe usage of data conforming to this schema:
+
+        >>> Data(subject_id=1, time=datetime.datetime(2023, 10, 1), code="A")
+        Data(subject_id=1,
+             time=datetime.datetime(2023, 10, 1, 0, 0),
+             code='A',
+             numeric_value=None,
+             text_value=None)
     """
 
     PYTHON_TO_JSON: ClassVar[dict[Any, str]] = {
@@ -236,3 +245,18 @@ class JSONSchema(Schema[Any, JSON_Schema_T, JSON_blob_T]):
     def _validate_table(cls, table: JSON_blob_T):
         """Validate the table against the schema."""
         validate(instance=table, schema=cls.schema())
+
+    @classmethod
+    def _raw_table_schema(cls, table: dict) -> Any:
+        return {
+            "type": "object",
+            "properties": {k: cls._map_type_internal(type(v)) for k, v in table.items()},
+        }
+
+    @classmethod
+    def _reorder_raw_table(cls, tbl: JSON_blob_T, tbl_order: list[str]) -> dict:
+        return {k: tbl[k] for k in tbl_order}
+
+    @classmethod
+    def _cast_raw_table_column(cls, tbl: JSON_blob_T, col: str, col_type: Any) -> dict:
+        raise NotImplementedError("This is not supported.")
