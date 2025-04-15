@@ -44,7 +44,47 @@ ColumnDType = type | Any
 
 
 class Column:
-    """A simple class to represent a column in the schema."""
+    """A simple class to represent a column in the schema.
+
+    In general, using `Column(...)` should be avoided in favor of either `Optional` or `Required`, which more
+    visibly indicate required status.
+
+    Attributes:
+        dtype: The data type contained in this column.
+        default: The default value this column will take on. This will typically be `None`.
+        nullable: What fraction of values in this column can be `null`.
+        name: The name of this column in the source table. May not be set in all instances.
+        is_optional: Whether this column is required or optional.
+
+    Examples:
+        >>> C = Column(int)
+        >>> print(C)
+        Column(int)
+        >>> C.dtype
+        <class 'int'>
+        >>> C.has_default
+        False
+
+    By default, a column reports its optionality as `None`, which evaluates to `False` but allows one to
+    determine whether optionality was explicitly determined.
+
+        >>> print(C.is_optional)
+        None
+
+    You can also set parameters like default, nullability, optionality, and name:
+
+        >>> C = Column(str, default="foo", nullable=Nullability.ALL, is_optional=True, name="foo_col")
+        >>> print(C)
+        Column(str, name=foo_col, is_optional=True, default=foo, nullable=Nullability.ALL)
+
+    Nullability can also be set to `True` which evaluates to `Nullability.ALL` and `False`, which evaluates
+    to `Nullability.NONE`:
+
+        >>> print(Column(list[int], nullable=True))
+        Column(list, nullable=Nullability.ALL)
+        >>> print(Column(dict[str, int], nullable=False))
+        Column(dict, nullable=Nullability.NONE)
+    """
 
     def __init__(
         self,
