@@ -259,3 +259,11 @@ class JSONSchema(Schema[Any, JSON_Schema_T, JSON_blob_T]):
     @classmethod
     def _cast_raw_table_column(cls, tbl: JSON_blob_T, col: str, col_type: Any) -> dict:
         raise NotImplementedError("This is not supported.")
+
+    @classmethod
+    def _any_null(cls, tbl: JSON_blob_T, col: str) -> bool:
+        return tbl.get(col, None) is None
+
+    @classmethod
+    def _all_null(cls, tbl: JSON_blob_T, col: str) -> bool:
+        return tbl.get(col, None) is None

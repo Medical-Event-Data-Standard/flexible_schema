@@ -39,6 +39,14 @@ def get_sample_schema(allow_extra_columns: bool) -> Schema:
             out[col] = col_type(tbl[col])
             return out
 
+        @classmethod
+        def _any_null(cls, tbl: dict, col: str) -> bool:
+            return tbl.get(col) is None
+
+        @classmethod
+        def _all_null(cls, tbl: dict, col: str) -> bool:
+            return tbl.get(col) is None
+
     Sample.allow_extra_columns = allow_extra_columns
 
     return Sample
