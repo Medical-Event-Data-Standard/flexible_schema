@@ -40,12 +40,14 @@ def get_sample_schema(allow_extra_columns: bool) -> Schema:
             return out
 
         @classmethod
+        def _is_raw_table(cls, arg: Any) -> bool:
+            return isinstance(arg, dict)
+
+        @classmethod
         def _any_null(cls, tbl: dict, col: str) -> bool:
             return tbl.get(col) is None
 
-        @classmethod
-        def _all_null(cls, tbl: dict, col: str) -> bool:
-            return tbl.get(col) is None
+        _all_null = _any_null
 
     Sample.allow_extra_columns = allow_extra_columns
 

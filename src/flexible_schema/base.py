@@ -211,13 +211,13 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
 
     @classmethod
     @abstractmethod
-    def _any_null(cls: type[S], tbl: RawTable_T, col: str) -> bool:
+    def _any_null(cls: type[S], table: RawTable_T, col: str) -> bool:
         """Check if any values in the column are null."""
         raise NotImplementedError(f"_any_null is not supported by {cls.__name__} objects.")
 
     @classmethod
     @abstractmethod
-    def _all_null(cls: type[S], tbl: RawTable_T, col: str) -> bool:
+    def _all_null(cls: type[S], table: RawTable_T, col: str) -> bool:
         """Check if all values in the column are null."""
         raise NotImplementedError(f"_all_null is not supported by {cls.__name__} objects.")
 
@@ -262,6 +262,19 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
         return isinstance(arg, type(cls.schema()))
 
     @classmethod
+    @abstractmethod
+    def _is_raw_table(cls, arg: Any) -> bool:
+        """Check if the argument is a raw table (e.g., of type `RawTable_T`).
+
+        Args:
+            arg: The argument to check.
+
+        Returns:
+            True if the argument is a table, False otherwise.
+        """
+        raise NotImplementedError(f"_is_raw_table is not supported by {cls.__name__} objects.")
+
+    @classmethod
     def validate(cls: type[S], arg: RawTable_T | RawSchema_T):
         """Validate the argument against the schema.
 
@@ -272,7 +285,9 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
             `True` if the argument is valid.
 
         Raises:
-            SchemaValidationError: If the argument is invalid.
+            SchemaValidationError: If the argument is a schema and invalid.
+            TableValidationError: If the argument is a table and invalid.
+            TypeError: If the argument is neither a schema nor a table.
         """
         if cls._is_raw_schema(arg):
             try:
@@ -281,28 +296,30 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
                 raise e
             except Exception as e:
                 raise SchemaValidationError("Schema validation failed") from e
-        else:
+        elif cls._is_raw_table(arg):
             try:
                 cls._validate_table(arg)
             except (TableValidationError, SchemaValidationError) as e:
                 raise e
             except Exception as e:
                 raise TableValidationError("Table validation failed") from e
+        else:
+            raise TypeError(f"Expected a schema or table, but got: {type(arg).__name__}")
 
     @classmethod
-    def _raw_table_cols(cls: type[S], tbl: RawTable_T) -> list[str]:
+    def _raw_table_cols(cls: type[S], table: RawTable_T) -> list[str]:
         """Get all columns in the table."""
-        return cls._raw_schema_cols(cls._raw_table_schema(tbl))
+        return cls._raw_schema_cols(cls._raw_table_schema(table))
 
     @classmethod
     @abstractmethod
-    def _reorder_raw_table(cls: type[S], tbl: RawTable_T, tbl_order: list[str]) -> RawTable_T:
+    def _reorder_raw_table(cls: type[S], table: RawTable_T, table_order: list[str]) -> RawTable_T:
         raise NotImplementedError(f"_reorder_raw_table is not supported by {cls.__name__} objects.")
 
     @classmethod
-    def _align_col_order(cls: type[S], tbl: RawTable_T) -> RawTable_T:
+    def _align_col_order(cls: type[S], table: RawTable_T) -> RawTable_T:
         """Re-order the columns of the table to match the schema."""
-        table_cols = cls._raw_table_cols(tbl)
+        table_cols = cls._raw_table_cols(table)
 
         out_order = []
         for c in cls._columns():
@@ -312,30 +329,32 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
         if cls.allow_extra_columns:
             out_order.extend([c for c in table_cols if c not in out_order])
 
-        return cls._reorder_raw_table(tbl, out_order)
+        return cls._reorder_raw_table(table, out_order)
 
     @classmethod
     @abstractmethod
-    def _cast_raw_table_column(cls: type[S], tbl: RawTable_T, col: str, want_type: ColumnDType) -> RawTable_T:
+    def _cast_raw_table_column(
+        cls: type[S], table: RawTable_T, col: str, want_type: ColumnDType
+    ) -> RawTable_T:
         raise NotImplementedError(f"_cast_raw_table_column is not supported by {cls.__name__} objects.")
 
     @classmethod
     def _cast_raw_table(
-        cls: type[S], tbl: RawTable_T, mistyped_cols: list[tuple[str, ColumnDType, ColumnDType]]
+        cls: type[S], table: RawTable_T, mistyped_cols: list[tuple[str, ColumnDType, ColumnDType]]
     ) -> RawTable_T:
         """Cast the columns of the table to match the schema."""
 
         for col, want_type, _ in mistyped_cols:
-            tbl = cls._cast_raw_table_column(tbl, col, want_type)
+            table = cls._cast_raw_table_column(table, col, want_type)
 
-        return tbl
+        return table
 
     @classmethod
-    def align(cls: type[S], tbl: RawTable_T) -> RawTable_T:
+    def align(cls: type[S], table: RawTable_T) -> RawTable_T:
         """Align the table to the schema.
 
         Args:
-            tbl: The table to align.
+            table: The table to align.
 
         Returns:
             The aligned table.
@@ -344,7 +363,7 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
         mistyped_cols = []
 
         try:
-            cls.validate(tbl)
+            cls.validate(table)
         except SchemaValidationError as e:
             if e.missing_req_cols or e.disallowed_extra_cols:
                 raise SchemaValidationError(
@@ -358,12 +377,12 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
         except TableValidationError as e:
             raise e
 
-        tbl = cls._align_col_order(tbl)
+        table = cls._align_col_order(table)
 
         if mistyped_cols:
             try:
-                tbl = cls._cast_raw_table(tbl, mistyped_cols)
+                table = cls._cast_raw_table(table, mistyped_cols)
             except Exception as e:
                 raise SchemaValidationError(mistyped_cols=mistyped_cols) from e
 
-        return tbl
+        return table

@@ -1,6 +1,6 @@
 """A simple class for flexible schema definition and usage."""
 
-import datetime
+from datetime import datetime
 from typing import Any, ClassVar, get_args, get_origin
 
 import pyarrow as pa
@@ -22,7 +22,7 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
         >>> class Data(PyArrowSchema):
         ...     allow_extra_columns: ClassVar[bool] = True
         ...     subject_id: int
-        ...     time: datetime.datetime
+        ...     time: datetime
         ...     code: str
         ...     numeric_value: float | None = None
         ...     text_value: str | None = None
@@ -69,32 +69,39 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
 
     You can also validate tables with this class
 
-        >>> data_tbl = pa.Table.from_pydict({
+        >>> data_table = pa.Table.from_pydict({
         ...     "subject_id": [1, 2, 3],
         ...     "time": [
-        ...         datetime.datetime(2021, 3, 1),
-        ...         datetime.datetime(2021, 4, 1),
-        ...         datetime.datetime(2021, 5, 1),
+        ...         datetime(2021, 3, 1),
+        ...         datetime(2021, 4, 1),
+        ...         datetime(2021, 5, 1),
         ...     ],
         ...     "code": ["A", "B", "C"],
         ... })
-        >>> Data.validate(data_tbl) # No issues
-        >>> data_tbl = pa.Table.from_pydict({
+        >>> Data.validate(data_table) # No issues
+        >>> data_table = pa.Table.from_pydict({
         ...     "subject_id": ["1", "2", "3"],
         ...     "time": [
-        ...         datetime.datetime(2021, 3, 1),
-        ...         datetime.datetime(2021, 4, 1),
-        ...         datetime.datetime(2021, 5, 1),
+        ...         datetime(2021, 3, 1),
+        ...         datetime(2021, 4, 1),
+        ...         datetime(2021, 5, 1),
         ...     ],
         ...     "code": ["A", "B", "C"],
         ...     "text_value": [1, 2, 3],
         ... })
-        >>> Data.validate(data_tbl)
+        >>> Data.validate(data_table)
         Traceback (most recent call last):
             ...
         flexible_schema.exceptions.SchemaValidationError:
             Columns with incorrect types: subject_id (want int64, got string),
                                           text_value (want string, got int64)
+
+    Validation will fail if the passed object is neither a table or a schema:
+
+        >>> Data.validate({"subject_id": 1, "time": datetime(2021, 3, 1), "code": "A"})
+        Traceback (most recent call last):
+            ...
+        TypeError: Expected a schema or table, but got: dict
 
     Table validation will also check on certain nullability constraints:
 
@@ -156,11 +163,11 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
     can be done safely:
 
         >>> Data.allow_extra_columns = True
-        >>> data_tbl = pa.Table.from_pydict({
+        >>> data_table = pa.Table.from_pydict({
         ...     "time": [
-        ...         datetime.datetime(2021, 3, 1),
-        ...         datetime.datetime(2021, 4, 1),
-        ...         datetime.datetime(2021, 5, 1),
+        ...         datetime(2021, 3, 1),
+        ...         datetime(2021, 4, 1),
+        ...         datetime(2021, 5, 1),
         ...     ],
         ...     "subject_id": [1, 2, 3],
         ...     "extra_col": ["extra1", "extra2", "extra3"],
@@ -173,7 +180,7 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
         ...         pa.field("code", pa.string()),
         ...     ]
         ... ))
-        >>> Data.align(data_tbl)
+        >>> Data.align(data_table)
         pyarrow.Table
         subject_id: int64
         time: timestamp[us]
@@ -188,21 +195,21 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
     Alignment also raises errors when the table cannot be aligned to the target schema
 
         >>> Data.allow_extra_columns = False
-        >>> Data.align(data_tbl)
+        >>> Data.align(data_table)
         Traceback (most recent call last):
             ...
         flexible_schema.exceptions.SchemaValidationError:
             Disallowed extra columns: extra_col
-        >>> data_tbl = pa.Table.from_pydict({
+        >>> data_table = pa.Table.from_pydict({
         ...     "time": [
-        ...         datetime.datetime(2021, 3, 1),
-        ...         datetime.datetime(2021, 4, 1),
-        ...         datetime.datetime(2021, 5, 1),
+        ...         datetime(2021, 3, 1),
+        ...         datetime(2021, 4, 1),
+        ...         datetime(2021, 5, 1),
         ...     ],
         ...     "subject_id": ["foo", "bar", "baz"],
         ...     "code": ["A", "B", "C"],
         ... })
-        >>> Data.align(data_tbl)
+        >>> Data.align(data_table)
         Traceback (most recent call last):
             ...
         flexible_schema.exceptions.SchemaValidationError:
@@ -243,12 +250,12 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
         >>> class Data(PyArrowSchema):
         ...     allow_extra_columns: ClassVar[bool] = True
         ...     subject_id: int
-        ...     time: datetime.datetime
+        ...     time: datetime
         ...     code: str
         ...     numeric_value: float | None = None
         ...     text_value: str | None = None
         ...     parent_codes: list[str] | None = None
-        >>> data = Data(subject_id=1, time=datetime.datetime(2025, 3, 7, 16), code="A", numeric_value=1.0)
+        >>> data = Data(subject_id=1, time=datetime(2025, 3, 7, 16), code="A", numeric_value=1.0)
         >>> data
         Data(subject_id=1,
              time=datetime.datetime(2025, 3, 7, 16, 0),
@@ -263,7 +270,7 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
         float: pa.float32(),
         str: pa.string(),
         bool: pa.bool_(),
-        datetime.datetime: pa.timestamp("us"),
+        datetime: pa.timestamp("us"),
     }
 
     @classmethod
@@ -297,19 +304,23 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
         return table.schema
 
     @classmethod
-    def _reorder_raw_table(cls, tbl: pa.Table, tbl_order: list[str]) -> pa.Table:
-        return tbl.select(tbl_order)
+    def _is_raw_table(cls, arg: Any) -> bool:
+        return isinstance(arg, pa.Table)
 
     @classmethod
-    def _cast_raw_table_column(cls, tbl: pa.Table, col: str, want_type: pa.DataType) -> pa.Table:
-        return tbl.set_column(tbl.schema.get_field_index(col), col, tbl.column(col).cast(want_type))
+    def _reorder_raw_table(cls, table: pa.Table, table_order: list[str]) -> pa.Table:
+        return table.select(table_order)
 
     @classmethod
-    def _any_null(cls, tbl: pa.Table, col: str) -> bool:
+    def _cast_raw_table_column(cls, table: pa.Table, col: str, want_type: pa.DataType) -> pa.Table:
+        return table.set_column(table.schema.get_field_index(col), col, table.column(col).cast(want_type))
+
+    @classmethod
+    def _any_null(cls, table: pa.Table, col: str) -> bool:
         """Check if any values in the column are null."""
-        return pc.any(pc.is_null(tbl.column(col))).as_py()
+        return pc.any(pc.is_null(table.column(col))).as_py()
 
     @classmethod
-    def _all_null(cls, tbl: pa.Table, col: str) -> bool:
+    def _all_null(cls, table: pa.Table, col: str) -> bool:
         """Check if all values in the column are null."""
-        return pc.all(pc.is_null(tbl.column(col))).as_py()
+        return pc.all(pc.is_null(table.column(col))).as_py()
