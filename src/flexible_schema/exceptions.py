@@ -37,4 +37,34 @@ class SchemaValidationError(Exception):
 
 
 class TableValidationError(Exception):
-    pass
+    """Exception raised for table validation errors."""
+
+    def __init__(
+        self,
+        msg: str | None = None,
+        *,
+        nullability_none_err_cols: list[str] | None = None,
+        nullability_some_err_cols: list[str] | None = None,
+    ):
+        self.nullability_none_err_cols = nullability_none_err_cols
+        self.nullability_some_err_cols = nullability_some_err_cols
+        self.msg = msg
+
+        super().__init__(self.message)
+
+    @property
+    def message(self) -> str:
+        if self.msg is not None:
+            return self.msg
+
+        msg_parts = []
+        if self.nullability_none_err_cols:
+            msg_parts.append(
+                f"Columns that should have no nulls but do: {', '.join(self.nullability_none_err_cols)}"
+            )
+        if self.nullability_some_err_cols:
+            msg_parts.append(
+                "Columns that should have some non-nulls but don't: "
+                f"{', '.join(self.nullability_some_err_cols)}"
+            )
+        return ". ".join(msg_parts)

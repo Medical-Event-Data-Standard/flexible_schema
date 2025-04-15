@@ -1,4 +1,3 @@
-from dataclasses import fields
 from typing import Any, ClassVar
 
 from flexible_schema import Schema, SchemaValidationError
@@ -11,12 +10,12 @@ def get_sample_schema(allow_extra_columns: bool) -> Schema:
         foo: str | None = None
 
         @classmethod
-        def _map_type_internal(cls, field_type: Any) -> Any:
+        def map_type(cls, field_type: Any) -> Any:
             return field_type
 
         @classmethod
         def schema(cls):
-            return {f.name: cls.map_type(f) for f in fields(cls)}
+            return {c.name: c.dtype for c in cls._columns()}
 
         @classmethod
         def _raw_schema_col_type(cls, schema: Any, col: str) -> Any:
@@ -39,6 +38,14 @@ def get_sample_schema(allow_extra_columns: bool) -> Schema:
             out = {**tbl}
             out[col] = col_type(tbl[col])
             return out
+
+        @classmethod
+        def _any_null(cls, tbl: dict, col: str) -> bool:
+            return tbl.get(col) is None
+
+        @classmethod
+        def _all_null(cls, tbl: dict, col: str) -> bool:
+            return tbl.get(col) is None
 
     Sample.allow_extra_columns = allow_extra_columns
 
