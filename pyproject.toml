@@ -43,6 +43,7 @@ addopts = [
   "--doctest-modules",
   "--ignore=docs",
 ]
+doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 
 [tool.coverage.report]
 exclude_also = ["@(abc\\.)?abstractmethod"]
