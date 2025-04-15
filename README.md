@@ -207,10 +207,10 @@ Data(subject_id=None, numeric_value=35.0, other=3)
 
 The following schemas are supported:
 
-| Schema Type                                                                          | Description                                                                                 | Supported Functionalities |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------- |
-| [`PyArrowSchema`](src/flexible_schema/pyarrow#flexible_schema.pyarrow.PyArrowSchema) | A schema that can be used to validate and align PyArrow tables.                             | All functionality.        |
-| [`JSONSchema`](src/flexible_schema/json#flexible_schema.json.JSONSchema)             | A schema wrapper around [`jsonschema`](https://python-jsonschema.readthedocs.io/en/stable). | Validation only.          |
+| Schema Type                                    | Description                                                                                 | Supported Functionalities |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------- |
+| [`PyArrowSchema`](src/flexible_schema/pyarrow) | A schema that can be used to validate and align PyArrow tables.                             | All functionality.        |
+| [`JSONSchema`](src/flexible_schema/json)       | A schema wrapper around [`jsonschema`](https://python-jsonschema.readthedocs.io/en/stable). | Validation only.          |
 
 ## Terminology
 
