@@ -4,7 +4,7 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, fields
 from typing import Any, ClassVar, Generic, TypeVar
 
-from .columns import Column, ColumnDType, resolve_dataclass_field
+from .columns import Column, ColumnDType, Nullability, resolve_dataclass_field
 from .exceptions import SchemaValidationError, TableValidationError
 
 RawDataType_T = TypeVar("RawDataType_T")
@@ -210,9 +210,41 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
         raise NotImplementedError(f"__raw_table_schema is not supported by {cls.__name__} objects.")
 
     @classmethod
+    @abstractmethod
+    def _any_null(cls: type[S], tbl: RawTable_T, col: str) -> bool:
+        """Check if any values in the column are null."""
+        raise NotImplementedError(f"_any_null is not supported by {cls.__name__} objects.")
+
+    @classmethod
+    @abstractmethod
+    def _all_null(cls: type[S], tbl: RawTable_T, col: str) -> bool:
+        """Check if all values in the column are null."""
+        raise NotImplementedError(f"_all_null is not supported by {cls.__name__} objects.")
+
+    @classmethod
     def _validate_table(cls: type[S], table: RawTable_T):
         """Validate the table against the schema."""
         cls._validate_schema(cls._raw_table_schema(table))
+
+        nullability_none_err_cols = []
+        nullability_some_err_cols = []
+        for col in cls.columns():
+            if col not in cls._raw_table_cols(table):
+                continue
+
+            match cls._columns_map()[col].nullable:
+                case Nullability.NONE if cls._any_null(table, col):
+                    nullability_none_err_cols.append(col)
+                case Nullability.SOME if cls._all_null(table, col):
+                    nullability_some_err_cols.append(col)
+                case Nullability.ALL:
+                    continue
+
+        if nullability_none_err_cols or nullability_some_err_cols:
+            raise TableValidationError(
+                nullability_none_err_cols=nullability_none_err_cols,
+                nullability_some_err_cols=nullability_some_err_cols,
+            )
 
     @classmethod
     def _is_raw_schema(cls, arg: Any) -> bool:
