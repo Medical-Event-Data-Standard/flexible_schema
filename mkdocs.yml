@@ -5,7 +5,7 @@ site_author: Matthew McDermott
 
 nav:
   - Home: index.md
-  - API: api/
+  - API: src/
   - Issues: https://github.com/Medical-Event-Data-Standard/flexible_schema/issues
 
 theme:

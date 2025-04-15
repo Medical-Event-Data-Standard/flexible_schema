@@ -54,6 +54,10 @@ class SchemaMeta(ABCMeta):
                     f"{cls.__name__} does not allow extra columns, but got: {err_str}"
                 )
 
+            for c in cols:
+                if c.is_optional and c.name not in to_pass:
+                    to_pass[c.name] = c.default
+
             old_init(self, **to_pass)
             for k, v in extra.items():
                 self[k] = v
