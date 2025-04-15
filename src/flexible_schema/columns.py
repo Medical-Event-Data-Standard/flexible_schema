@@ -84,6 +84,19 @@ class Column:
         Column(list, nullable=Nullability.ALL)
         >>> print(Column(dict[str, int], nullable=False))
         Column(dict, nullable=Nullability.NONE)
+
+    Nullability can also be set to the string equivalents of the enum values:
+
+        >>> print(Column(list[int], nullable="some"))
+        Column(list, nullable=Nullability.SOME)
+
+    But if you set it to another type, an error will occur:
+
+        >>> Column(int, nullable=32)
+        Traceback (most recent call last):
+            ...
+        TypeError: Invalid type for nullable: <class 'int'>, expected bool, str, or Nullability. If using a
+            string, it must be one of 'none', 'some', or 'all'.
     """
 
     def __init__(
@@ -224,18 +237,21 @@ class Optional(Column):
         >>> default_list
         ['foo']
 
-    You can't try to overwrite `is_optional` upon initialization:
+    You can't try to overwrite `is_optional` upon or after initialization:
 
-        >>> O = Optional(int, is_optional=False)
+        >>> Optional(int, is_optional=False)
         Traceback (most recent call last):
             ...
-        ValueError: is_optional is not a valid argument for Optional
+        ValueError: is_optional cannot be set to False for Optional columns
+        >>> O.is_optional = False
+        Traceback (most recent call last):
+            ...
+        ValueError: is_optional cannot be set to False for Optional columns
     """
 
     def __init__(self, *args, **kwargs):
-        if "is_optional" in kwargs:
-            raise ValueError(f"is_optional is not a valid argument for {self.__class__.__name__}")
-        kwargs["is_optional"] = True
+        if "is_optional" not in kwargs:
+            kwargs["is_optional"] = True
         self._is_optional = True
         super().__init__(*args, **kwargs)
 
@@ -277,25 +293,28 @@ class Required(Column):
         >>> R.nullable
         <Nullability.NONE: 'none'>
 
-    You can't try to overwrite `is_optional` upon initialization:
+    You can't try to overwrite `is_optional` upon or after initialization:
 
-        >>> R = Required(int, is_optional=False)
+        >>> Required(int, is_optional=True)
         Traceback (most recent call last):
             ...
-        ValueError: is_optional is not a valid argument for Required
+        ValueError: is_optional cannot be set to True for Required columns
+        >>> R.is_optional = True
+        Traceback (most recent call last):
+            ...
+        ValueError: is_optional cannot be set to True for Required columns
 
     Required columns can't have default values:
 
-        >>> R = Required(int, default=3)
+        >>> Required(int, default=3)
         Traceback (most recent call last):
             ...
         ValueError: Required columns cannot have a default value
     """
 
     def __init__(self, *args, **kwargs):
-        if "is_optional" in kwargs:
-            raise ValueError(f"is_optional is not a valid argument for {self.__class__.__name__}")
-        kwargs["is_optional"] = False
+        if "is_optional" not in kwargs:
+            kwargs["is_optional"] = False
         self._is_optional = False
         super().__init__(*args, **kwargs)
 

@@ -1,6 +1,9 @@
 from typing import Any, ClassVar
+from unittest.mock import patch
 
-from flexible_schema import Schema, SchemaValidationError
+import pytest
+
+from flexible_schema import Schema, SchemaValidationError, TableValidationError
 
 
 def get_sample_schema(allow_extra_columns: bool) -> Schema:
@@ -40,12 +43,14 @@ def get_sample_schema(allow_extra_columns: bool) -> Schema:
             return out
 
         @classmethod
+        def _is_raw_table(cls, arg: Any) -> bool:
+            return isinstance(arg, dict)
+
+        @classmethod
         def _any_null(cls, tbl: dict, col: str) -> bool:
             return tbl.get(col) is None
 
-        @classmethod
-        def _all_null(cls, tbl: dict, col: str) -> bool:
-            return tbl.get(col) is None
+        _all_null = _any_null
 
     Sample.allow_extra_columns = allow_extra_columns
 
@@ -109,30 +114,43 @@ def test_schema_no_extra_cols():
     sample["foo"] = "bar"
     assert sample == sample_2
 
-    try:
+    with pytest.raises(SchemaValidationError) as excinfo:
         sample = Sample(subject_id=1, foo="bar", extra="extra")
-        raise AssertionError("Should have raised an exception")
-    except SchemaValidationError as e:
-        assert "Sample does not allow extra columns, but got: 'extra'" in str(e)
+    assert "Sample does not allow extra columns, but got: 'extra'" in str(excinfo.value)
 
-    try:
+    with pytest.raises(SchemaValidationError) as excinfo:
         sample["extra"] = "extra"
-        raise AssertionError("Should have raised an exception")
-    except SchemaValidationError as e:
-        assert "Extra field not allowed: 'extra'" in str(e)
+    assert "Extra field not allowed: 'extra'" in str(excinfo.value)
 
 
 def test_errors():
     Sample = get_sample_schema(False)  # noqa: N806
 
-    try:
+    with pytest.raises(TypeError) as excinfo:
         Sample(1, 2, 3)
-        raise AssertionError("Should have raised an exception")
-    except TypeError as e:
-        assert "Sample expected 2 arguments, got 3" in str(e)
+    assert "Sample expected 2 arguments, got 3" in str(excinfo.value)
 
-    try:
+    with pytest.raises(TypeError) as excinfo:
         Sample(1, subject_id=1, foo=2)
-        raise AssertionError("Should have raised an exception")
-    except TypeError as e:
-        assert "Sample got multiple values for argument 'subject_id'" in str(e)
+    assert "Sample got multiple values for argument 'subject_id'" in str(excinfo.value)
+
+
+def test_more_errors():
+    Sample = get_sample_schema(False)  # noqa: N806
+
+    with patch.object(Sample, "_validate_schema", side_effect=ValueError):
+        with pytest.raises(SchemaValidationError) as excinfo:
+            Sample.validate({"subject_id": 1, "foo": "bar"})
+        assert "Schema validation failed" in str(excinfo.value)
+
+    with patch.object(Sample, "_validate_schema", side_effect=SchemaValidationError("No-details")):
+        with pytest.raises(SchemaValidationError) as excinfo:
+            Sample.align({"subject_id": 1, "foo": "bar"})
+        assert "No-details" in str(excinfo.value)
+
+    Sample._is_raw_schema = lambda x: False
+    Sample._is_raw_table = lambda x: True
+    with patch.object(Sample, "_validate_table", side_effect=ValueError):
+        with pytest.raises(TableValidationError) as excinfo:
+            Sample.validate({"subject_id": 1, "foo": "bar"})
+        assert "Table validation failed" in str(excinfo.value)
