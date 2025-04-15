@@ -149,12 +149,12 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
 
     What about columns defined without an explicit nullable property?
 
-        >>> class ComplexNullsData(PyArrowSchema):
+        >>> class DefaultsData(PyArrowSchema):
         ...     default: pa.int64()
         ...     on_default: int | None
-        >>> ComplexNullsData._columns_map()["default"].nullable
+        >>> DefaultsData._columns_map()["default"].nullable
         <Nullability.SOME: 'some'>
-        >>> ComplexNullsData._columns_map()["on_default"].nullable
+        >>> DefaultsData._columns_map()["on_default"].nullable
         <Nullability.ALL: 'all'>
 
     Beyond validation of tables (which either raises an error or returns nothing), you can also _align_ tables
@@ -214,6 +214,18 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
             ...
         flexible_schema.exceptions.SchemaValidationError:
             Columns with incorrect types: subject_id (want int64, got string)
+
+    And if the base table validation fails due to nullability violations or other violations:
+
+        >>> ComplexNullsData.align(pa.Table.from_pydict({"none": [1, None]}))
+        Traceback (most recent call last):
+            ...
+        flexible_schema.exceptions.TableValidationError:
+            Columns that should have no nulls but do: none
+        >>> ComplexNullsData.align("foo")
+        Traceback (most recent call last):
+            ...
+        TypeError: Expected a schema or table, but got: str
 
     You can also specify type hints directly using PyArrow types:
 

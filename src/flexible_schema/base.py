@@ -353,11 +353,20 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
     def align(cls: type[S], table: RawTable_T) -> RawTable_T:
         """Align the table to the schema.
 
+        > [!WARNING]
+        > This method will only work if the implementation of the validation functions in the derived classes
+        > return detailed errors indicating the source of validation errors during schema and table
+        > validation.
+
         Args:
             table: The table to align.
 
         Returns:
             The aligned table.
+
+        Raises:
+            SchemaValidationError: If the schema is invalid to the degree that alignment is impossible.
+            TableValidationError: If the table is invalid to the degree that alignment is impossible.
         """
 
         mistyped_cols = []
@@ -374,8 +383,8 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
                 mistyped_cols = e.mistyped_cols
             else:
                 raise e
-        except TableValidationError as e:
-            raise e
+        except:
+            raise
 
         table = cls._align_col_order(table)
 

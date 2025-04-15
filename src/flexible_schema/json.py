@@ -148,6 +148,13 @@ class JSONSchema(Schema[JSONType, JSON_Schema_T, JSON_blob_T]):
             ...
         TypeError: Expected a schema or table, but got: str
 
+    Alignment is not supported in JSONSchema:
+
+        >>> Data.align({"subject_id": 1, "time": "2023-10-01T00:00:00", "code": "A"})
+        Traceback (most recent call last):
+            ...
+        NotImplementedError: JSONSchema does not support alignment
+
     You can also use this class as a dataclass for type-safe usage of data conforming to this schema:
 
         >>> Data(subject_id=1, time=datetime(2023, 10, 1), code="A")
@@ -233,6 +240,10 @@ class JSONSchema(Schema[JSONType, JSON_Schema_T, JSON_blob_T]):
             list[int]
             >>> JSONSchema._inv_map_type({"type": "string", "format": "date-time"})
             <class 'datetime.datetime'>
+            >>> JSONSchema._inv_map_type({"type": "object"})
+            Traceback (most recent call last):
+                ...
+            ValueError: Unsupported type: {'type': 'object'}
         """
 
         if json_type["type"] == "array":
@@ -354,19 +365,8 @@ class JSONSchema(Schema[JSONType, JSON_Schema_T, JSON_blob_T]):
         validate(instance=table, schema=cls.schema())
 
     @classmethod
-    def _raw_table_schema(cls, table: dict) -> Any:
-        """Approximate the schema of the passed table.
-
-        This isn't used in JSONSchema, but we keep it to match the interface.
-
-        Args:
-            table: The table to approximate the schema for.
-        """
-
-        return {
-            "type": "object",
-            "properties": {k: cls.map_type(type(v)) for k, v in table.items()},
-        }
+    def _raw_table_schema(cls, table: dict) -> Any:  # pragma: no cover
+        raise NotImplementedError("JSONSchema does not support _raw_table_schema")
 
     @classmethod
     def _reorder_raw_table(cls, table: JSON_blob_T, table_order: list[str]) -> JSON_blob_T:
@@ -432,6 +432,10 @@ class JSONSchema(Schema[JSONType, JSON_Schema_T, JSON_blob_T]):
             return [cls.__cast_raw_val(v, col_type["items"]) for v in in_val]
         else:
             return inv_type(in_val)
+
+    @classmethod
+    def align(cls, table: JSON_blob_T) -> JSON_blob_T:
+        raise NotImplementedError("JSONSchema does not support alignment")
 
     @classmethod
     def _any_null(cls, table: JSON_blob_T, col: str) -> bool:
