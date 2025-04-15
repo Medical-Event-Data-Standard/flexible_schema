@@ -40,6 +40,7 @@ You can define a `PyArrowSchema` with a dataclass like syntax:
 ...     code: Required(pa.string(), nullable=False)
 ...     numeric_value: Optional(pa.float32())
 ...     text_value: Optional(pa.string())
+
 ```
 
 This schema defines a table that has the following properties:
@@ -71,6 +72,7 @@ DataType(int64)
 'time'
 >>> Data.time_dtype
 TimestampType(timestamp[us])
+
 ```
 
 This is useful for building downstream tools that want to reliably access column names and types via
@@ -106,7 +108,7 @@ can't be determined from the schema data types alone.
 >>> Data.validate(data_tbl)
 Traceback (most recent call last):
   ...
-SchemaValidationError: TODO ERROR MESSAGE
+flexible_schema.exceptions.SchemaValidationError: Missing required columns: time
 >>> data_tbl = pa.Table.from_pydict({
 ...     "time": [
 ...         datetime.datetime(2021, 3, 1),
@@ -116,22 +118,18 @@ SchemaValidationError: TODO ERROR MESSAGE
 ...     "subject_id": [1, 2, 3],
 ...     "code": ["A", "B", "C"],
 ... })
->>> with print_warnings():
-...     Data.validate(data_tbl)
-Warning: Columns 'subject_id' and 'code' do not allow null values, but the input table has a schema that
-permits null values.
+>>> Data.validate(data_tbl) # No issues
 >>> aligned_tbl = Data.align(data_tbl)
 >>> aligned_tbl
 pyarrow.Table
-subject_id: int64 not null
+subject_id: int64
 time: timestamp[us]
-code: string not null
+code: string
 ----
 subject_id: [[1,2,3]]
 time: [[2021-03-01 00:00:00.000000,2021-04-01 00:00:00.000000,2021-05-01 00:00:00.000000]]
 code: [["A","B","C"]]
->>> with print_warnings():
-...     Data.validate(aligned_tbl)
+>>> Data.validate(aligned_tbl)
 >>> data_tbl_with_extra = pa.Table.from_pydict({
 ...     "time": [
 ...         datetime.datetime(2021, 3, 1),
@@ -147,18 +145,15 @@ pyarrow.Table
 subject_id: int64
 time: timestamp[us]
 code: string
-numeric_value: float
-text_value: string
 extra_1: string
 extra_2: int64
 ----
 subject_id: [[4,5]]
 time: [[2021-03-01 00:00:00.000000,2021-04-01 00:00:00.000000]]
 code: [["D","E"]]
-numeric_value: [[null,null]]
-text_value: [[null,null]]
 extra_1: [["extra1","extra2"]]
 extra_2: [[452,11]]
+
 ```
 
 ## Detailed Documentation
@@ -193,6 +188,7 @@ parameter of the `Optional` and `Required` types.
 ...     req_some_null_2: pa.int64() # Equivalent to the above.
 ...     req_all_null_1: Required(pa.int64(), nullable=True) # All nulls allowed.
 ...     req_all_null_2: Required(pa.int64(), nullable=Nullability.ALL) # Equivalent to `nullable=True`
+
 ```
 
 The same applies to `Optional` columns, but the default is `nullable=True` (i.e., all nulls allowed).
@@ -205,4 +201,5 @@ The same applies to `Optional` columns, but the default is `nullable=True` (i.e.
 ...     opt_all_null_1: Optional(pa.int64(), nullable=True) # All nulls allowed.
 ...     opt_all_null_2: Optional(pa.int64(), nullable=Nullability.ALL) # Equivalent to `nullable=True`
 ...     opt_all_null_3: Optional(pa.int64()) # Equivalent to the above.
+
 ```
