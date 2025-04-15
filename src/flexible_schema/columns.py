@@ -9,6 +9,8 @@ from typing import Any, Union, get_args, get_origin
 class Nullability(Enum):
     """A simple str-like enum to represent the nullability of a column.
 
+    Upon Python upgrade to 3.11, convert to `StrEnum`.
+
     Attributes:
         NONE: No value in the given column can be `null`/`None`.
         SOME: Some, but not all, values in the given column can be `null`/`None`.
@@ -122,7 +124,7 @@ class Column:
 
         if self.name:
             t_str = f"{t_str}, name={self.name}"
-        if cls_str == "Column":
+        if cls_str == "Column" and self._is_optional is not None:
             t_str = f"{t_str}, is_optional={self.is_optional}"
         if self.has_default:
             t_str = f"{t_str}, default={self.default}"
@@ -133,7 +135,7 @@ class Column:
 
 
 class Optional(Column):
-    """A class to represent optional types in a schema.
+    """A class to represent optional columns in a schema.
 
     Examples:
         >>> O = Optional(int)
@@ -145,6 +147,9 @@ class Optional(Column):
         False
         >>> O.is_optional
         True
+
+    Default nullability for Optional columns is "ALL"
+
         >>> O.nullable
         <Nullability.ALL: 'all'>
 
@@ -201,6 +206,52 @@ class Optional(Column):
 
 
 class Required(Column):
+    """A class to represent required columns in a schema.
+
+    Examples:
+        >>> R = Required(int)
+        >>> print(R)
+        Required(int)
+        >>> R.dtype
+        <class 'int'>
+        >>> R.has_default
+        False
+        >>> R.is_optional
+        False
+
+    Default nullability for Required columns is "some"
+
+        >>> R.nullable
+        <Nullability.SOME: 'some'>
+
+    You can also define Required columns with different nullability constraints:
+
+        >>> R = Required(int, nullable=True)
+        >>> R
+        Required(int, nullable=Nullability.ALL)
+        >>> R.is_optional
+        False
+        >>> R.nullable
+        <Nullability.ALL: 'all'>
+        >>> R = Required(list[str], nullable=False)
+        >>> R.nullable
+        <Nullability.NONE: 'none'>
+
+    You can't try to overwrite `is_optional` upon initialization:
+
+        >>> R = Required(int, is_optional=False)
+        Traceback (most recent call last):
+            ...
+        ValueError: is_optional is not a valid argument for Required
+
+    Required columns can't have default values:
+
+        >>> R = Required(int, default=3)
+        Traceback (most recent call last):
+            ...
+        ValueError: Required columns cannot have a default value
+    """
+
     def __init__(self, *args, **kwargs):
         if "is_optional" in kwargs:
             raise ValueError(f"is_optional is not a valid argument for {self.__class__.__name__}")
@@ -217,15 +268,61 @@ class Required(Column):
 def _resolve_annotation(
     annotation: Any, type_mapper: Callable[[ColumnDType], ColumnDType]
 ) -> Column | Optional | Required:
+    """Builds a column for a given dataclass field that leverages a type mapping function to resolve types.
+
+    Args:
+        annotation: The type of the dataclass field that is being converted.
+        type_mapper: A function to convert between a base python type (e.g., `int`) and a column dtype (e.g.,
+            `pa.int64()`).
+
+    Returns:
+        A column corresponding to the annotation type.
+
+    Examples:
+        >>> import pyarrow as pa
+        >>> def type_mapper(T):
+        ...     if T is int:
+        ...         return pa.int64()
+        ...     elif T is str:
+        ...         return pa.string()
+        ...     else:
+        ...         raise TypeError("Can't map types that aren't ints or strs")
+        >>> _resolve_annotation(int, type_mapper)
+        Column(DataType(int64))
+        >>> _resolve_annotation(int | None, type_mapper)
+        Column(DataType(int64), nullable=Nullability.ALL)
+
+    If you pass in a type that causes an error to be raised through remapping, it will fail
+
+        >>> _resolve_annotation(list[int], type_mapper)
+        Traceback (most recent call last):
+            ...
+        TypeError: Can't map types that aren't ints or strs
+
+    Note that if you pass in a Column, the type is still re-mapped.
+
+        >>> _resolve_annotation(Column(str, nullable=False), type_mapper)
+        Column(DataType(string), nullable=Nullability.NONE)
+
+    But, if you pass a Column as input, if the base type doesn't remap, no error will be thrown.
+
+        >>> _resolve_annotation(Column(list[str], nullable=False), type_mapper)
+        Column(list, nullable=Nullability.NONE)
+    """
+
     if isinstance(annotation, Column):
+        try:
+            remapped = type_mapper(annotation.dtype)
+            annotation.dtype = remapped
+        except Exception:
+            pass
+
         return annotation
 
     origin = get_origin(annotation)
     if (origin is Union or origin is types.UnionType) and type(None) in get_args(annotation):
         base_type = next(a for a in get_args(annotation) if a is not type(None))
         col = _resolve_annotation(base_type, type_mapper)
-        if col._nullable is not None:
-            raise ValueError("foo")
         col.nullable = True
 
         return col
