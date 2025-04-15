@@ -292,9 +292,9 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
     @classmethod
     def _any_null(cls, tbl: pa.Table, col: str) -> bool:
         """Check if any values in the column are null."""
-        return tbl.column(col).is_null().any().as_py()
+        return pa.compute.any(pa.compute.is_null(tbl.column(col)))
 
     @classmethod
     def _all_null(cls, tbl: pa.Table, col: str) -> bool:
         """Check if all values in the column are null."""
-        return tbl.column(col).is_null().all().as_py()
+        return pa.compute.all(pa.compute.is_null(tbl.column(col)))
