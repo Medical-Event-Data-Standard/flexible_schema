@@ -262,8 +262,20 @@ class JSONSchema(Schema[Any, JSON_Schema_T, JSON_blob_T]):
 
     @classmethod
     def _any_null(cls, tbl: JSON_blob_T, col: str) -> bool:
+        """Checks if any value in the table at the given column is None.
+
+        This isn't used in JSON, but we keep them to match the interface.
+
+        Examples:
+            >>> class Sample(JSONSchema):
+            ...     subject_id: int
+            >>> Sample._any_null({"subject_id": 1}, "subject_id")
+            False
+            >>> Sample._any_null({"subject_id": None}, "subject_id")
+            True
+            >>> Sample._any_null({}, "subject_id")
+            True
+        """
         return tbl.get(col, None) is None
 
-    @classmethod
-    def _all_null(cls, tbl: JSON_blob_T, col: str) -> bool:
-        return tbl.get(col, None) is None
+    _all_null = _any_null
