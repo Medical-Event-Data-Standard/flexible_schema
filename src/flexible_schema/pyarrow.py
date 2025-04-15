@@ -4,6 +4,7 @@ import datetime
 from typing import Any, ClassVar, get_args, get_origin
 
 import pyarrow as pa
+import pyarrow.compute as pc
 
 from .base import Schema
 
@@ -99,21 +100,23 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
 
         >>> from flexible_schema import Optional
         >>> class ComplexNullsData(PyArrowSchema):
-        ...     all: Optional(pa.int64(), nullability="all")
-        ...     none: Optional(pa.int64(), nullability="none")
-        ...     some: Optional(pa.int64(), nullability="some")
-        ...     default: pa.int64()
-        ...     on_default: pa.int64() | None
+        ...     all: Optional(pa.int64(), nullable="all")
+        ...     none: Optional(pa.int64(), nullable="none")
+        ...     some: Optional(pa.int64(), nullable="some")
 
     For Nullability.ALL, any amount of nulls are allowed:
 
-        >>> ComplexNullsData.validate(pa.Table.from_pydict({"all": [None, None]})) # No issues
+        >>> ComplexNullsData.validate(
+        ...     pa.Table.from_pydict({"all": [None, None]}, schema=pa.schema([pa.field("all", pa.int64())]))
+        ... ) # No issues
         >>> ComplexNullsData.validate(pa.Table.from_pydict({"all": [1, 2]})) # No issues
         >>> ComplexNullsData.validate(pa.Table.from_pydict({"all": [1, None]})) # No issues
 
     For Nullability.NONE, no nulls are allowed:
 
-        >>> ComplexNullsData.validate(pa.Table.from_pydict({"none": [None, None]}))
+        >>> ComplexNullsData.validate(
+        ...     pa.Table.from_pydict({"none": [None, None]}, schema=pa.schema([pa.field("none", pa.int64())]))
+        ... )
         Traceback (most recent call last):
             ...
         flexible_schema.exceptions.TableValidationError:
@@ -127,13 +130,25 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
 
     For Nullability.SOME, at least one non-null is required:
 
-        >>> ComplexNullsData.validate(pa.Table.from_pydict({"some": [None, None]}))
+        >>> ComplexNullsData.validate(
+        ...     pa.Table.from_pydict({"some": [None, None]}, schema=pa.schema([pa.field("some", pa.int64())]))
+        ... )
         Traceback (most recent call last):
             ...
         flexible_schema.exceptions.TableValidationError:
             Columns that should have some non-nulls but don't: some
         >>> ComplexNullsData.validate(pa.Table.from_pydict({"some": [1, 2]})) # No issues
         >>> ComplexNullsData.validate(pa.Table.from_pydict({"some": [1, None]})) # No issues
+
+    What about columns defined without an explicit nullable property?
+
+        >>> class ComplexNullsData(PyArrowSchema):
+        ...     default: pa.int64()
+        ...     on_default: int | None
+        >>> ComplexNullsData._columns_map()["default"].nullable
+        <Nullability.SOME: 'some'>
+        >>> ComplexNullsData._columns_map()["on_default"].nullable
+        <Nullability.ALL: 'all'>
 
     Beyond validation of tables (which either raises an error or returns nothing), you can also _align_ tables
     with this class, which performs safe, no-data-change operations to convert an input table into a format
@@ -292,9 +307,9 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
     @classmethod
     def _any_null(cls, tbl: pa.Table, col: str) -> bool:
         """Check if any values in the column are null."""
-        return pa.compute.any(pa.compute.is_null(tbl.column(col)))
+        return pc.any(pc.is_null(tbl.column(col))).as_py()
 
     @classmethod
     def _all_null(cls, tbl: pa.Table, col: str) -> bool:
         """Check if all values in the column are null."""
-        return pa.compute.all(pa.compute.is_null(tbl.column(col)))
+        return pc.all(pc.is_null(tbl.column(col))).as_py()
