@@ -24,6 +24,7 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.superfences
+  - github-callouts
 
 extra_javascript:
   - javascripts/mathjax.js
@@ -34,9 +35,12 @@ plugins:
   - gen-files:
       scripts:
         - docs/gen_ref_pages.py
+        - docs/copy_README.py
   - literate-nav:
       nav_file: SUMMARY.md
   - section-index
   - mkdocstrings
   - git-authors
   - git-revision-date-localized
+
+watch: [src, README.md]
