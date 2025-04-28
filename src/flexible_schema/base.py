@@ -74,6 +74,7 @@ S = TypeVar("Schema", bound="Schema")
 
 class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMeta):
     allow_extra_columns: ClassVar[bool] = True
+    _preffered_order: ClassVar[tuple[str] | None] = None
 
     # The Schema class should behave like a dictionary:
 
@@ -111,7 +112,16 @@ class Schema(Generic[RawDataType_T, RawSchema_T, RawTable_T], metaclass=SchemaMe
 
     @classmethod
     def _columns(cls: type[S]) -> list[Column]:
-        return [f.metadata["column"] for f in fields(cls)]
+        base = [f.metadata["column"] for f in fields(cls)]
+
+        if cls._preffered_order:
+            in_list = [c for c in base if c.name in cls._preffered_order]
+            not_in_list = [c for c in base if c.name not in cls._preffered_order]
+
+            in_list.sort(key=lambda c: cls._preffered_order.index(c.name))
+            return in_list + not_in_list
+        else:
+            return base
 
     @classmethod
     def _columns_map(cls: type[S]) -> dict[str, Column]:
