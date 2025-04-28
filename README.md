@@ -90,6 +90,18 @@ programmatic constants, rather than hard-coded literals.
 > beneficial to downstream users, as their code will error out at the import / attribute level, not because a
 > hard-coded string no longer matches a column name, but it is something to be aware of.
 
+You can also directly access the "raw schema" type via the `schema` attribute:
+
+```python
+>>> Data.schema()
+subject_id: int64
+time: timestamp[us]
+code: string
+numeric_value: float
+text_value: string
+
+```
+
 ### Table and Schema Validation and Alignment
 
 You can also use the schema to validate possible `PyArrow` schemas or tables and align possibly invalid tables
@@ -202,6 +214,25 @@ Data(subject_id='wrong_type', numeric_value=None, other=3)
 Data(subject_id=None, numeric_value=35.0, other=3)
 
 ```
+
+### Extending a schema
+
+You can also extend a schema by subclassing it. This process allows you to add additional columns to a derived
+schema without duplicating the base schema columns:
+
+```python
+>>> class DerivedData(Data):
+...     extra_col: Optional(pa.int64())
+>>> DerivedData.schema()
+subject_id: int64
+numeric_value: float
+other: int16
+extra_col: int64
+
+```
+
+Note this appends the new columns to the end of the schema, which does affect the default ordering that is
+used for aligned columns, though this does not impact data table or query schema validity in any way.
 
 ### Supported Schemas
 
