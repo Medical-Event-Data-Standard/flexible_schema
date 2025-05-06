@@ -215,6 +215,28 @@ Data(subject_id=None, numeric_value=35.0, other=3)
 
 ```
 
+This use case scenario makes more sense with `JSONSchema`, as a JSON "table" is just a typed dictionary. This
+is useful in that the `to_dict()` method enables you to naturally use `json.dump()` or `json.dumps()` on the
+dataclass object (after application of `to_dict()`).
+
+```python
+>>> from flexible_schema import JSONSchema
+>>> class Measurement(JSONSchema):
+...     subject_id: Required(int, nullable=False)
+...     code: Optional(str)
+...     numeric_value: Optional(float)
+>>> measurement = Measurement(subject_id=42, code="A")
+>>> measurement
+Measurement(subject_id=42, code='A', numeric_value=None)
+>>> measurement.to_dict()
+{'subject_id': 42, 'code': 'A'}
+>>> json.dumps(measurement.to_dict())
+'{"subject_id": 42, "code": "A"}'
+>>> Measurement(**json.loads(json.dumps(measurement.to_dict())))
+Measurement(subject_id=42, code='A', numeric_value=None)
+
+```
+
 ### Extending a schema
 
 You can also extend a schema by subclassing it. This process allows you to add additional columns to a derived
