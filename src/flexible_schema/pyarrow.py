@@ -8,6 +8,47 @@ import pyarrow.compute as pc
 
 from .base import Schema
 
+def _has_module(module_name: str) -> bool:
+    """A helper function that returns True if a module is importable and False otherwise.
+
+    Examples:
+        >>> _has_module("pyarrow")
+        True
+        >>> _has_module("non_existent_module")
+        False
+    """
+    try:
+        __import__(module_name)
+        return True
+    except ImportError:
+        return False
+
+if _has_module("polars"):
+    import polars as pl
+
+    PL_SCHEMA = pl.Schema
+
+    PL_TYPE_MAP: dict[pa.DataType, pl.DataType] = {
+        pa.bool_(): pl.Boolean,
+        pa.int8(): pl.Int8,
+        pa.int16(): pl.Int16,
+        pa.int32(): pl.Int32,
+        pa.int64(): pl.Int64,
+        pa.uint8(): pl.UInt8,
+        pa.uint16(): pl.UInt16,
+        pa.uint32(): pl.UInt32,
+        pa.uint64(): pl.UInt64,
+        pa.float16(): None,
+        pa.float32(): pl.Float32,
+        pa.float64(): pl.Float64,
+        pa.time32(): None,
+        pa.time64(): pl.Time,
+        ...
+    }
+
+else:
+    PL_SCHEMA = None
+
 
 # A Schema is a generic that takes a RawDataType_T, RawSchema_T, and a RawTable_T
 class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
@@ -336,3 +377,18 @@ class PyArrowSchema(Schema[pa.DataType | pa.Field, pa.Schema, pa.Table]):
     def _all_null(cls, table: pa.Table, col: str) -> bool:
         """Check if all values in the column are null."""
         return pc.all(pc.is_null(table.column(col))).as_py()
+
+    @classmethod
+    def pl_schema(cls) -> PL_SCHEMA:
+        """Return the schema as a Polars schema."""
+        if not _has_module("polars"):
+            raise ImportError("Polars is not installed. Please install it to use this feature.")
+
+        schema = {}
+        for col in cls._columns():
+            pl_dtype = PL_TYPE_MAP.get(col.dtype, None)
+            if pl_dtype is None:
+                raise ValueError(f"Unsupported type for polars mapping: {col.dtype}")
+            schema[col.name] = pl_dtype
+
+        return schema
