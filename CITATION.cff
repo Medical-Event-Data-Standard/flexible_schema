@@ -1,0 +1,28 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: flexible_schema
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Matthew
+    family-names: McDermott
+    email: mattmcdermott8@gmail.com
+    orcid: 'https://orcid.org/0000-0001-6048-9707'
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.17535818
+repository-code: >-
+  https://github.com/Medical-Event-Data-Standard/flexible_schema
+abstract: >-
+  flexible_schema provides a simple vehicle to specify and
+  validate schemas for PyArrow tables and JSON objects that
+  permit extension tables with additional columns, optional
+  columns that may be missing wholesale (but that must
+  conform to the specified type if present), column-order
+  agnostic validation, and modes type-coercion where
+  permissible.
+license: MIT
